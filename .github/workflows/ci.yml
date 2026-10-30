@@ -1,0 +1,50 @@
+# Her push ve pull request'te kod kalitesi kontrol edilir ve testler çalışır.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff
+      - name: Ruff (kod kalitesi ve güvenlik kuralları)
+        run: ruff check .
+      - name: Ruff format
+        run: ruff format --check .
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      DJANGO_DEBUG: "False"
+      DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+      DJANGO_ALLOWED_HOSTS: localhost,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Eksik migration var mı?
+        run: python manage.py makemigrations --check --dry-run
+      - name: Testler
+        run: coverage run manage.py test
+      - name: Kapsam raporu
+        run: coverage report

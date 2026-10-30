@@ -20,9 +20,7 @@ def new_token() -> str:
 
 
 class Course(models.Model):
-    teacher = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="courses"
-    )
+    teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="courses")
     name = models.CharField("Ders adı", max_length=120)
     code = models.CharField("Ders kodu", max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -101,13 +99,14 @@ class AttendanceSession(models.Model):
 
 
 class AttendanceRecord(models.Model):
-    session = models.ForeignKey(
-        AttendanceSession, on_delete=models.CASCADE, related_name="records"
-    )
+    session = models.ForeignKey(AttendanceSession, on_delete=models.CASCADE, related_name="records")
     student_number = models.CharField("Öğrenci numarası", max_length=20)
     first_name = models.CharField("Ad", max_length=100)
     last_name = models.CharField("Soyad", max_length=100)
-    device_id = models.CharField(max_length=64, blank=True, null=True)
+    # Normalde CharField'da null=True önerilmez (boş değer için "" kullanılır).
+    # Burada bilinçli: (session, device_id) benzersiz olduğu için cihaz kimliği
+    # olmayan kayıtlar "" olsaydı birbiriyle çakışırdı; NULL'lar çakışmaz.
+    device_id = models.CharField(max_length=64, blank=True, null=True)  # noqa: DJ001
     # Konum doğrulaması açıksa öğrencinin sınıfa uzaklığı (metre) saklanır.
     distance_m = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -117,12 +116,8 @@ class AttendanceRecord(models.Model):
         verbose_name = "Yoklama kaydı"
         verbose_name_plural = "Yoklama kayıtları"
         constraints = [
-            models.UniqueConstraint(
-                fields=["session", "student_number"], name="unique_student_per_session"
-            ),
-            models.UniqueConstraint(
-                fields=["session", "device_id"], name="unique_device_per_session"
-            ),
+            models.UniqueConstraint(fields=["session", "student_number"], name="unique_student_per_session"),
+            models.UniqueConstraint(fields=["session", "device_id"], name="unique_device_per_session"),
         ]
 
     def __str__(self):

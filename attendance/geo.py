@@ -23,8 +23,12 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def is_within_radius(
-    center_lat: float, center_lon: float, radius_m: int,
-    lat: float, lon: float, accuracy_m: float,
+    center_lat: float,
+    center_lon: float,
+    radius_m: int,
+    lat: float,
+    lon: float,
+    accuracy_m: float,
 ) -> tuple[bool, float]:
     """
     Öğrencinin sınıf yarıçapı içinde olup olmadığını döner.

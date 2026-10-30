@@ -30,6 +30,7 @@ CHECKIN_GRANT_SECONDS = 180
 # Yardımcılar
 # ---------------------------------------------------------------------------
 
+
 def _qr_png_base64(data: str) -> str:
     img = qrcode.make(data)
     buffer = io.BytesIO()
@@ -64,6 +65,7 @@ def _get_own_session(request, pk: int) -> AttendanceSession:
 # Hesap
 # ---------------------------------------------------------------------------
 
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
@@ -80,15 +82,20 @@ def signup(request):
 # Öğretmen ekranları (hepsi giriş gerektirir)
 # ---------------------------------------------------------------------------
 
+
 @login_required
 def dashboard(request):
     courses = request.user.courses.annotate(session_count=Count("sessions"))
     active_sessions = AttendanceSession.objects.active().filter(course__teacher=request.user)
-    return render(request, "attendance/dashboard.html", {
-        "courses": courses,
-        "active_sessions": active_sessions,
-        "course_form": CourseForm(),
-    })
+    return render(
+        request,
+        "attendance/dashboard.html",
+        {
+            "courses": courses,
+            "active_sessions": active_sessions,
+            "course_form": CourseForm(),
+        },
+    )
 
 
 @login_required
@@ -109,11 +116,15 @@ def course_create(request):
 def course_detail(request, pk):
     course = get_object_or_404(Course, pk=pk, teacher=request.user)
     sessions = course.sessions.annotate(record_count=Count("records"))
-    return render(request, "attendance/course_detail.html", {
-        "course": course,
-        "sessions": sessions,
-        "start_form": StartSessionForm(),
-    })
+    return render(
+        request,
+        "attendance/course_detail.html",
+        {
+            "course": course,
+            "sessions": sessions,
+            "start_form": StartSessionForm(),
+        },
+    )
 
 
 @login_required
@@ -152,10 +163,14 @@ def session_start(request, pk):
 @login_required
 def session_live(request, pk):
     session = _get_own_session(request, pk)
-    return render(request, "attendance/session_live.html", {
-        "session": session,
-        "qr_code_b64": _qr_png_base64(_checkin_url(request, session)) if session.is_active else None,
-    })
+    return render(
+        request,
+        "attendance/session_live.html",
+        {
+            "session": session,
+            "qr_code_b64": _qr_png_base64(_checkin_url(request, session)) if session.is_active else None,
+        },
+    )
 
 
 @login_required
@@ -166,10 +181,12 @@ def session_refresh_qr(request, pk):
     if not session.is_active:
         return JsonResponse({"active": False})
     session.rotate_token()
-    return JsonResponse({
-        "active": True,
-        "qr_code_b64": _qr_png_base64(_checkin_url(request, session)),
-    })
+    return JsonResponse(
+        {
+            "active": True,
+            "qr_code_b64": _qr_png_base64(_checkin_url(request, session)),
+        }
+    )
 
 
 @login_required
@@ -185,29 +202,29 @@ def session_records(request, pk):
     except ValueError:
         after = 0
     records = session.records.filter(pk__gt=after).order_by("pk")
-    return JsonResponse({
-        "active": session.is_active,
-        "total": session.records.count(),
-        "records": [
-            {
-                "id": r.pk,
-                "name": f"{r.first_name} {r.last_name}",
-                "number": r.student_number,
-                "time": timezone.localtime(r.created_at).strftime("%H:%M:%S"),
-                "distance": r.distance_m,
-            }
-            for r in records
-        ],
-    })
+    return JsonResponse(
+        {
+            "active": session.is_active,
+            "total": session.records.count(),
+            "records": [
+                {
+                    "id": r.pk,
+                    "name": f"{r.first_name} {r.last_name}",
+                    "number": r.student_number,
+                    "time": timezone.localtime(r.created_at).strftime("%H:%M:%S"),
+                    "distance": r.distance_m,
+                }
+                for r in records
+            ],
+        }
+    )
 
 
 @login_required
 @require_POST
 def record_delete(request, pk):
     """Öğretmen hatalı ya da şüpheli bir kaydı listeden çıkarabilir."""
-    record = get_object_or_404(
-        AttendanceRecord, pk=pk, session__course__teacher=request.user
-    )
+    record = get_object_or_404(AttendanceRecord, pk=pk, session__course__teacher=request.user)
     record.delete()
     return JsonResponse({"deleted": pk})
 
@@ -230,17 +247,18 @@ def session_export(request, pk):
     ws.title = "Yoklama"
     ws.append(["Ad", "Soyad", "Numara", "Katılım zamanı"])
     for r in session.records.all():
-        ws.append([
-            _excel_safe(r.first_name),
-            _excel_safe(r.last_name),
-            r.student_number,
-            timezone.localtime(r.created_at).strftime("%d.%m.%Y %H:%M:%S"),
-        ])
+        ws.append(
+            [
+                _excel_safe(r.first_name),
+                _excel_safe(r.last_name),
+                r.student_number,
+                timezone.localtime(r.created_at).strftime("%d.%m.%Y %H:%M:%S"),
+            ]
+        )
 
-    filename = f"yoklama_{session.course.code or session.course.pk}_{timezone.localtime(session.started_at):%Y%m%d_%H%M}.xlsx"
-    response = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    started = timezone.localtime(session.started_at)
+    filename = f"yoklama_{session.course.code or session.course.pk}_{started:%Y%m%d_%H%M}.xlsx"
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
@@ -280,15 +298,17 @@ def _course_stats(course: Course) -> dict:
     students = []
     for row in rows:
         rate = round(100 * row["attended"] / total_sessions) if total_sessions else 0
-        students.append({
-            "number": row["student_number"],
-            "name": names.get(row["student_number"], ""),
-            "attended": row["attended"],
-            "missed": total_sessions - row["attended"],
-            "rate": rate,
-            "at_risk": rate < MIN_ATTENDANCE_RATE,
-            "last_seen": row["last_seen"],
-        })
+        students.append(
+            {
+                "number": row["student_number"],
+                "name": names.get(row["student_number"], ""),
+                "attended": row["attended"],
+                "missed": total_sessions - row["attended"],
+                "rate": rate,
+                "at_risk": rate < MIN_ATTENDANCE_RATE,
+                "last_seen": row["last_seen"],
+            }
+        )
     students.sort(key=lambda s: (s["rate"], s["name"]))
 
     max_count = max((s.record_count for s in sessions), default=0)
@@ -330,18 +350,18 @@ def course_stats_export(request, pk):
     ws.title = "Devam durumu"
     ws.append(["Numara", "Ad Soyad", "Katıldığı", "Kaçırdığı", "Devam oranı (%)", "Risk"])
     for s in stats["students"]:
-        ws.append([
-            _excel_safe(s["number"]),
-            _excel_safe(s["name"]),
-            s["attended"],
-            s["missed"],
-            s["rate"],
-            "Evet" if s["at_risk"] else "",
-        ])
+        ws.append(
+            [
+                _excel_safe(s["number"]),
+                _excel_safe(s["name"]),
+                s["attended"],
+                s["missed"],
+                s["rate"],
+                "Evet" if s["at_risk"] else "",
+            ]
+        )
 
-    response = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = f'attachment; filename="devam_durumu_{course.code or course.pk}.xlsx"'
     wb.save(response)
     return response
@@ -350,6 +370,7 @@ def course_stats_export(request, pk):
 # ---------------------------------------------------------------------------
 # Öğrenci tarafı (giriş gerektirmez)
 # ---------------------------------------------------------------------------
+
 
 def _grant_key(session_id: int) -> str:
     return f"checkin_grant_{session_id}"

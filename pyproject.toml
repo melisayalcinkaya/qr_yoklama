@@ -1,0 +1,27 @@
+[project]
+name = "qr-yoklama"
+version = "1.0.0"
+description = "Kısa ömürlü QR kodlarla güvenli ders yoklaması (Django)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+# E/F: temel hatalar, I: import sıralaması, B: olası bug'lar,
+# UP: modern Python yazımı, DJ: Django'ya özgü kurallar, S: güvenlik (bandit)
+select = ["E", "F", "I", "B", "UP", "DJ", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Testlerde assert ve sabit test şifreleri normaldir.
+"*/tests/*" = ["S101", "S105", "S106"]
+
+[tool.coverage.run]
+source = ["attendance", "config"]
+omit = ["*/migrations/*", "*/tests/*", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 85

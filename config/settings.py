@@ -30,7 +30,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if DEBUG:
         # Yalnızca yerel geliştirme için; production'da asla kullanılmaz.
-        SECRET_KEY = "dev-only-insecure-key-change-me"
+        SECRET_KEY = "dev-only-insecure-key-change-me"  # noqa: S105
     else:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY ortam değişkeni tanımlanmalı.")
 

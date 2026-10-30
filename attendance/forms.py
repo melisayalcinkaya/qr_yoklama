@@ -32,9 +32,7 @@ class CourseSettingsForm(forms.ModelForm):
 
 
 class StartSessionForm(forms.Form):
-    duration_minutes = forms.IntegerField(
-        label="Süre (dakika)", min_value=1, max_value=180, initial=15
-    )
+    duration_minutes = forms.IntegerField(label="Süre (dakika)", min_value=1, max_value=180, initial=15)
 
 
 class CheckinForm(forms.ModelForm):
