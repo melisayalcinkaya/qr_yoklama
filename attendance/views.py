@@ -18,7 +18,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import CheckinForm, CourseForm, StartSessionForm
+from .forms import CheckinForm, CourseForm, CourseSettingsForm, StartSessionForm
+from .geo import MAX_ACCEPTED_ACCURACY_M, is_within_radius
 from .models import AttendanceRecord, AttendanceSession, Course
 
 # Öğrenci QR'ı okuttuktan sonra formu doldurmak için bu kadar süresi var.
@@ -116,6 +117,17 @@ def course_detail(request, pk):
 
 
 @login_required
+def course_settings(request, pk):
+    course = get_object_or_404(Course, pk=pk, teacher=request.user)
+    form = CourseSettingsForm(request.POST or None, instance=course)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Ders ayarları kaydedildi.")
+        return redirect("course_detail", pk=course.pk)
+    return render(request, "attendance/course_settings.html", {"course": course, "form": form})
+
+
+@login_required
 @require_POST
 def session_start(request, pk):
     course = get_object_or_404(Course, pk=pk, teacher=request.user)
@@ -182,6 +194,7 @@ def session_records(request, pk):
                 "name": f"{r.first_name} {r.last_name}",
                 "number": r.student_number,
                 "time": timezone.localtime(r.created_at).strftime("%H:%M:%S"),
+                "distance": r.distance_m,
             }
             for r in records
         ],
@@ -347,6 +360,21 @@ def _has_valid_grant(request, session_id: int) -> bool:
     return granted_at is not None and time.time() - granted_at < CHECKIN_GRANT_SECONDS
 
 
+def _check_location(course: Course, data: dict) -> tuple[str | None, int | None]:
+    """Konum doğrulaması açıksa (hata mesajı, mesafe) döner; sorun yoksa hata None olur."""
+    if not course.location_enabled:
+        return None, None
+    lat, lon, acc = data.get("latitude"), data.get("longitude"), data.get("accuracy")
+    if lat is None or lon is None or acc is None:
+        return "Bu ders için konum izni gerekiyor. Lütfen tarayıcının konum iznini açın.", None
+    if acc > MAX_ACCEPTED_ACCURACY_M:
+        return "Konum hassasiyeti çok düşük. Wi-Fi veya GPS'i açıp tekrar deneyin.", None
+    inside, distance = is_within_radius(course.latitude, course.longitude, course.radius_m, lat, lon, acc)
+    if not inside:
+        return f"Sınıfın dışında görünüyorsunuz (yaklaşık {round(distance)} m uzakta).", round(distance)
+    return None, round(distance)
+
+
 def checkin(request, pk):
     """
     Akış:
@@ -380,8 +408,11 @@ def checkin(request, pk):
         record = form.save(commit=False)
         record.session = session
         record.device_id = form.cleaned_data.get("device_id") or None
+        location_error, record.distance_m = _check_location(session.course, form.cleaned_data)
 
-        if session.records.filter(student_number=record.student_number).exists():
+        if location_error:
+            form.add_error(None, location_error)
+        elif session.records.filter(student_number=record.student_number).exists():
             form.add_error("student_number", "Bu numarayla bu derste zaten yoklama alınmış.")
         elif record.device_id and session.records.filter(device_id=record.device_id).exists():
             form.add_error(None, "Bu cihazla bu derste zaten yoklama verilmiş.")

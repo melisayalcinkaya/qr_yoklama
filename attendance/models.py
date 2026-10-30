@@ -2,6 +2,7 @@ import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -25,6 +26,16 @@ class Course(models.Model):
     name = models.CharField("Ders adı", max_length=120)
     code = models.CharField("Ders kodu", max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Konum doğrulama (opsiyonel): açıksa öğrencinin sınıfa yakın olması gerekir.
+    location_enabled = models.BooleanField("Konum doğrulaması", default=False)
+    latitude = models.FloatField("Enlem", null=True, blank=True)
+    longitude = models.FloatField("Boylam", null=True, blank=True)
+    radius_m = models.PositiveIntegerField(
+        "İzin verilen yarıçap (metre)",
+        default=100,
+        validators=[MinValueValidator(20), MaxValueValidator(2000)],
+    )
 
     class Meta:
         ordering = ["name"]
@@ -97,6 +108,8 @@ class AttendanceRecord(models.Model):
     first_name = models.CharField("Ad", max_length=100)
     last_name = models.CharField("Soyad", max_length=100)
     device_id = models.CharField(max_length=64, blank=True, null=True)
+    # Konum doğrulaması açıksa öğrencinin sınıfa uzaklığı (metre) saklanır.
+    distance_m = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

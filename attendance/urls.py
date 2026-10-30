@@ -6,6 +6,7 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("courses/new/", views.course_create, name="course_create"),
     path("courses/<int:pk>/", views.course_detail, name="course_detail"),
+    path("courses/<int:pk>/settings/", views.course_settings, name="course_settings"),
     path("courses/<int:pk>/stats/", views.course_stats, name="course_stats"),
     path("courses/<int:pk>/stats/export/", views.course_stats_export, name="course_stats_export"),
     path("courses/<int:pk>/start/", views.session_start, name="session_start"),

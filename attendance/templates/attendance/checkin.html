@@ -10,8 +10,12 @@
         {{ form.first_name.label_tag }} {{ form.first_name }} {{ form.first_name.errors }}
         {{ form.last_name.label_tag }} {{ form.last_name }} {{ form.last_name.errors }}
         {{ form.student_number.label_tag }} {{ form.student_number }} {{ form.student_number.errors }}
-        {{ form.device_id }}
-        <button type="submit" class="btn btn-primary btn-block">Yoklamaya katıl</button>
+        {{ form.device_id }}{{ form.latitude }}{{ form.longitude }}{{ form.accuracy }}
+
+        {% if session.course.location_enabled %}
+        <p id="locationStatus" class="muted small">📍 Bu ders konum doğrulaması gerektiriyor. Konum alınıyor…</p>
+        {% endif %}
+        <button type="submit" id="submitBtn" class="btn btn-primary btn-block">Yoklamaya katıl</button>
     </form>
 </section>
 {% endblock %}
@@ -28,6 +32,33 @@
         if (!id) { id = crypto.randomUUID(); localStorage.setItem("device_id", id); }
     } catch (e) { /* gizli sekme vb. */ }
     if (id) document.getElementById("id_device_id").value = id;
+
+    {% if session.course.location_enabled %}
+    // Konum gerekiyorsa, konum alınana kadar gönder düğmesi pasif kalır.
+    const btn = document.getElementById("submitBtn");
+    const status = document.getElementById("locationStatus");
+    btn.disabled = true;
+
+    function fail(msg) { status.textContent = "⚠️ " + msg; }
+
+    if (!navigator.geolocation) {
+        fail("Tarayıcınız konum desteklemiyor.");
+    } else {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                document.getElementById("id_latitude").value = pos.coords.latitude;
+                document.getElementById("id_longitude").value = pos.coords.longitude;
+                document.getElementById("id_accuracy").value = pos.coords.accuracy;
+                status.textContent = `📍 Konum alındı (±${Math.round(pos.coords.accuracy)} m).`;
+                btn.disabled = false;
+            },
+            (err) => fail(err.code === err.PERMISSION_DENIED
+                ? "Konum izni reddedildi. Tarayıcı ayarlarından izin verip sayfayı yenileyin."
+                : "Konum alınamadı. GPS'i açıp sayfayı yenileyin."),
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+    }
+    {% endif %}
 })();
 </script>
 {% endblock %}

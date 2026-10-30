@@ -65,7 +65,7 @@
         name.textContent = r.name;
         const meta = document.createElement("span");
         meta.className = "muted";
-        meta.textContent = ` · ${r.number} · ${r.time}`;
+        meta.textContent = ` · ${r.number} · ${r.time}` + (r.distance !== null ? ` · ${r.distance} m` : "");
         const del = document.createElement("button");
         del.type = "button";
         del.className = "btn btn-ghost btn-small";

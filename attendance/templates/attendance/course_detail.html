@@ -4,8 +4,15 @@
 <p><a href="{% url 'dashboard' %}">← Derslerim</a></p>
 <div class="list-header">
     <h1>{{ course }}</h1>
-    <a class="btn" href="{% url 'course_stats' course.pk %}">📊 İstatistikler</a>
+    <div>
+        <a class="btn" href="{% url 'course_stats' course.pk %}">📊 İstatistikler</a>
+        <a class="btn" href="{% url 'course_settings' course.pk %}">⚙️ Ayarlar</a>
+    </div>
 </div>
+
+{% if course.location_enabled %}
+<p class="muted">📍 Konum doğrulaması açık · {{ course.radius_m }} m yarıçap</p>
+{% endif %}
 
 <section class="card">
     <h2>Yoklama başlat</h2>

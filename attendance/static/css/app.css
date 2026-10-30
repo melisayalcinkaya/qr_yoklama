@@ -46,3 +46,6 @@ input[type=text], input[type=password], input[type=number] { width: 100%; paddin
 .rate { display: inline-block; width: 60px; height: 6px; background: #eef0f3; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
 .rate-fill { height: 100%; background: #1f9d55; border-radius: 3px; }
 .row-warn .rate-fill { background: #c62f2f; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.checkbox { display: flex; gap: 8px; align-items: center; margin: 8px 0 12px; }
+button:disabled { opacity: .5; cursor: not-allowed; }

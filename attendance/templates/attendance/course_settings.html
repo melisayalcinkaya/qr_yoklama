@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Ayarlar · {{ course }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'course_detail' course.pk %}">← {{ course }}</a></p>
+<h1>Ders ayarları</h1>
+
+<form method="post" class="card">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {{ form.name.label_tag }} {{ form.name }} {{ form.name.errors }}
+    {{ form.code.label_tag }} {{ form.code }} {{ form.code.errors }}
+
+    <h2>📍 Konum doğrulaması</h2>
+    <p class="muted small">
+        Açıkken öğrenciler yalnızca sınıfın belirlenen yarıçapı içindeyken yoklama verebilir.
+        Sınıftayken “Konumumu kullan” düğmesine basmanız yeterli.
+    </p>
+    <label class="checkbox">{{ form.location_enabled }} {{ form.location_enabled.label }}</label>
+
+    <div class="row-2">
+        <div>{{ form.latitude.label_tag }} {{ form.latitude }} {{ form.latitude.errors }}</div>
+        <div>{{ form.longitude.label_tag }} {{ form.longitude }} {{ form.longitude.errors }}</div>
+    </div>
+    <button type="button" id="useLocation" class="btn">📍 Konumumu kullan</button>
+    <span id="locationStatus" class="muted small"></span>
+
+    {{ form.radius_m.label_tag }} {{ form.radius_m }} {{ form.radius_m.errors }}
+
+    <button type="submit" class="btn btn-primary">Kaydet</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("useLocation").addEventListener("click", () => {
+    const status = document.getElementById("locationStatus");
+    if (!navigator.geolocation) { status.textContent = "Tarayıcınız konum desteklemiyor."; return; }
+    status.textContent = "Konum alınıyor…";
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            document.getElementById("id_latitude").value = pos.coords.latitude.toFixed(6);
+            document.getElementById("id_longitude").value = pos.coords.longitude.toFixed(6);
+            document.getElementById("id_location_enabled").checked = true;
+            status.textContent = `Konum alındı (±${Math.round(pos.coords.accuracy)} m). Kaydetmeyi unutmayın.`;
+        },
+        () => { status.textContent = "Konum alınamadı. Tarayıcı izinlerini kontrol edin."; },
+        { enableHighAccuracy: true, timeout: 15000 }
+    );
+});
+</script>
+{% endblock %}
