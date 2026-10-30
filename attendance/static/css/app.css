@@ -243,6 +243,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .qr-timer span { display: block; height: 100%; background: #1f3a93; transform-origin: left; }
 .qr-timer span.run { animation: drain var(--cycle, 5s) linear forwards; }
 @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.qr-frame.is-stale .qr { filter: blur(12px); opacity: .25; }
+.qr-frame.is-stale .qr-timer { visibility: hidden; }
+#qrStale { max-width: 452px; margin: 12px auto 0; }
 .qr-panel .actions { justify-content: center; margin-top: 20px; }
 
 .count { font-size: 49px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }

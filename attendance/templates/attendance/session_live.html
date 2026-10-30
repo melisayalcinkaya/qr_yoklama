@@ -21,6 +21,9 @@
             <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu" width="420" height="420">
             <div class="qr-timer" aria-hidden="true"><span id="qrTimer"></span></div>
         </div>
+        <p id="qrStale" class="msg msg-error small" role="alert" hidden>
+            Sunucuya ulaşılamıyor, kod güncellenemiyor. Eski kod gizlendi; bağlantı gelince otomatik devam edecek.
+        </p>
         <p class="muted small" style="margin-top:12px">Kod 5 saniyede bir değişir; her kod en fazla 15 saniye geçerlidir.</p>
         <div class="actions">
             <form method="post" action="{% url 'session_close' session.pk %}">
@@ -145,13 +148,35 @@
         setTimeout(refreshQr, seconds * 1000 + 100);
     }
 
+    // Ekrandaki kod en geç bu süre içinde yenilenmeli. Yenilenemezse (ağ koptu,
+    // oturum düştü, sunucu yeniden başladı) eski kodu göstermeye devam etmek
+    // öğrencileri yanıltır: okuttukları her kod "süresi doldu" der. Bu yüzden gizliyoruz.
+    const STALE_AFTER_MS = 9000;
+    const frame = document.querySelector(".qr-frame");
+    const staleNote = document.getElementById("qrStale");
+    let lastSuccess = Date.now();
+
+    function setStale(stale) {
+        frame.classList.toggle("is-stale", stale);
+        staleNote.hidden = !stale;
+    }
+
+    setInterval(() => {
+        if (Date.now() - lastSuccess > STALE_AFTER_MS) setStale(true);
+    }, 1000);
+
     async function refreshQr() {
         try {
-            const res = await fetch(qrUrl);
+            const res = await fetch(qrUrl, { headers: { "Accept": "application/json" } });
+            // Oturum düştüyse istek giriş sayfasına yönlenir; oturum silindiyse 404 gelir.
+            // İki durumda da sayfayı yenileyip kullanıcıya gerçek durumu gösteriyoruz.
+            if (res.redirected || res.status === 404) { window.location.reload(); return; }
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
             if (!data.active) { window.location.reload(); return; }
             document.getElementById("qrImage").src = "data:image/png;base64," + data.qr_code_b64;
+            lastSuccess = Date.now();
+            setStale(false);
             scheduleRefresh(data.seconds_left);
         } catch (e) {
             setTimeout(refreshQr, 2000); // ağ hatasında kısa süre sonra tekrar dene
