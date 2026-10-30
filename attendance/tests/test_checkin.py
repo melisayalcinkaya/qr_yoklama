@@ -4,14 +4,13 @@ Projenin asıl güvenlik vaadi burada olduğu için en kapsamlı testler bunlar.
 """
 
 import time
-from datetime import timedelta
 from unittest import mock
 
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from attendance import views
+from attendance.models import QR_ROTATE_SECONDS, QR_VALID_WINDOWS
 
 from .factories import make_course, make_record, make_session, make_teacher
 
@@ -26,7 +25,7 @@ class CheckinFlowTests(TestCase):
 
     def scan(self, token=None):
         """QR okutmayı taklit eder."""
-        return self.client.get(self.url, {"t": token or self.session.token})
+        return self.client.get(self.url, {"t": token or self.session.current_token()})
 
     def test_valid_scan_redirects_to_form_without_token_in_url(self):
         response = self.scan()
@@ -54,15 +53,18 @@ class CheckinFlowTests(TestCase):
         self.assertEqual(self.scan("tahmin-edilen-token").status_code, 403)
 
     def test_expired_token_is_rejected(self):
-        self.session.token_expires_at = timezone.now() - timedelta(seconds=1)
-        self.session.save()
-        self.assertEqual(self.scan().status_code, 403)
+        """Paylaşılan QR fotoğrafı, geçerlilik süresi dolunca işe yaramamalı."""
+        shown = self.session.current_token()
+        later = time.time() + QR_ROTATE_SECONDS * (QR_VALID_WINDOWS + 1)
+        with mock.patch("attendance.models.time.time", return_value=later):
+            self.assertEqual(self.scan(shown).status_code, 403)
 
-    def test_old_token_rejected_after_rotation(self):
-        """Paylaşılan QR fotoğrafı, kod yenilendikten sonra işe yaramamalı."""
-        old_token = self.session.token
-        self.session.rotate_token()
-        self.assertEqual(self.scan(old_token).status_code, 403)
+    def test_code_scanned_right_after_rotation_is_accepted(self):
+        """Kullanıcı hatası düzeltmesi: telefon kaldırılırken ekranda kod değişirse yine kabul edilmeli."""
+        shown = self.session.current_token()
+        later = time.time() + QR_ROTATE_SECONDS
+        with mock.patch("attendance.models.time.time", return_value=later):
+            self.assertEqual(self.scan(shown).status_code, 302)
 
     def test_grant_expires(self):
         self.scan()
@@ -118,7 +120,7 @@ class LocationCheckinTests(TestCase):
         )
         self.session = make_session(self.course)
         self.url = reverse("checkin", args=[self.session.pk])
-        self.client.get(self.url, {"t": self.session.token})
+        self.client.get(self.url, {"t": self.session.current_token()})
 
     def post(self, **location):
         return self.client.post(self.url, {**VALID_FORM, **location})

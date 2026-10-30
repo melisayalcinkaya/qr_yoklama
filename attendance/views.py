@@ -40,7 +40,7 @@ def _qr_png_base64(data: str) -> str:
 
 def _checkin_url(request, session: AttendanceSession) -> str:
     path = reverse("checkin", args=[session.pk])
-    return request.build_absolute_uri(f"{path}?{urlencode({'t': session.token})}")
+    return request.build_absolute_uri(f"{path}?{urlencode({'t': session.current_token()})}")
 
 
 def _excel_safe(value: str) -> str:
@@ -72,7 +72,9 @@ def signup(request):
     form = UserCreationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         user = form.save()
-        login(request, user)
+        # Birden fazla kimlik doğrulama arka ucu (axes + ModelBackend) olduğunda
+        # Django hangisinin kullanılacağını açıkça bilmek ister.
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         messages.success(request, "Hesabınız oluşturuldu. İlk dersinizi ekleyin.")
         return redirect("dashboard")
     return render(request, "registration/signup.html", {"form": form})
@@ -169,22 +171,27 @@ def session_live(request, pk):
         {
             "session": session,
             "qr_code_b64": _qr_png_base64(_checkin_url(request, session)) if session.is_active else None,
+            # Ondalık ayırıcı yerel ayardan (tr: virgül) etkilenmesin diye metin olarak veriyoruz.
+            "seconds_left": f"{session.seconds_until_rotation():.2f}",
         },
     )
 
 
 @login_required
-@require_POST
+@require_GET
 def session_refresh_qr(request, pk):
-    """Panel bu adresi birkaç saniyede bir çağırır: token yenilenir, yeni QR döner."""
+    """
+    Panel bu adresi her zaman dilimi değiştiğinde çağırır ve o anın QR'ını alır.
+    Token zamandan türetildiği için veritabanına bir şey yazılmaz; bu yüzden GET.
+    """
     session = _get_own_session(request, pk)
     if not session.is_active:
         return JsonResponse({"active": False})
-    session.rotate_token()
     return JsonResponse(
         {
             "active": True,
             "qr_code_b64": _qr_png_base64(_checkin_url(request, session)),
+            "seconds_left": round(session.seconds_until_rotation(), 2),
         }
     )
 

@@ -20,7 +20,7 @@ class AttendanceRecordInline(admin.TabularInline):
 class AttendanceSessionAdmin(admin.ModelAdmin):
     list_display = ("course", "started_at", "ends_at", "closed_at")
     list_filter = ("course",)
-    exclude = ("token", "token_expires_at")
+    exclude = ("secret",)
     inlines = [AttendanceRecordInline]
 
 

@@ -1,4 +1,8 @@
+import base64
+import hashlib
+import hmac
 import secrets
+import time
 from datetime import timedelta
 
 from django.conf import settings
@@ -6,10 +10,12 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-# QR kodun içindeki token bu süre boyunca geçerlidir. Panel QR'ı bundan
-# daha sık yeniler; böylece ekran görüntüsüyle paylaşılan bir QR kısa
-# sürede işe yaramaz hale gelir.
-TOKEN_LIFETIME = timedelta(seconds=15)
+# QR kod her QR_ROTATE_SECONDS saniyede bir değişir. Ekranda gösterilen bir kod,
+# kendisinden sonraki (QR_VALID_WINDOWS - 1) yenileme boyunca da kabul edilir.
+# 5 sn x 3 pencere: her kod göründüğü andan itibaren 10-15 saniye geçerlidir.
+# Telefonu kaldırıp okutmaya yetecek kadar uzun, fotoğrafını paylaşmaya yetmeyecek kadar kısa.
+QR_ROTATE_SECONDS = 5
+QR_VALID_WINDOWS = 3
 DEFAULT_SESSION_DURATION = timedelta(minutes=15)
 
 
@@ -54,8 +60,9 @@ class AttendanceSession(models.Model):
     started_at = models.DateTimeField(default=timezone.now)
     ends_at = models.DateTimeField()
     closed_at = models.DateTimeField(null=True, blank=True)
-    token = models.CharField(max_length=64, default=new_token)
-    token_expires_at = models.DateTimeField()
+    # QR token'ları bu gizli değerden ve o anki zaman diliminden türetilir
+    # (bkz. token_for_window). Gizli değer hiçbir zaman öğrenciye gönderilmez.
+    secret = models.CharField(max_length=64, default=new_token)
 
     objects = AttendanceSessionQuerySet.as_manager()
 
@@ -68,29 +75,47 @@ class AttendanceSession(models.Model):
         return f"{self.course} - {timezone.localtime(self.started_at):%d.%m.%Y %H:%M}"
 
     def save(self, *args, **kwargs):
-        now = timezone.now()
         if not self.ends_at:
-            self.ends_at = (self.started_at or now) + DEFAULT_SESSION_DURATION
-        if not self.token_expires_at:
-            self.token_expires_at = now + TOKEN_LIFETIME
+            self.ends_at = (self.started_at or timezone.now()) + DEFAULT_SESSION_DURATION
         super().save(*args, **kwargs)
 
     @property
     def is_active(self) -> bool:
         return self.closed_at is None and timezone.now() < self.ends_at
 
-    def rotate_token(self) -> None:
-        self.token = new_token()
-        self.token_expires_at = timezone.now() + TOKEN_LIFETIME
-        self.save(update_fields=["token", "token_expires_at"])
+    # --- Zamana bağlı QR token'ları ---------------------------------------
+    # Google Authenticator'daki 6 haneli kodlarla (TOTP) aynı fikir: token, gizli
+    # değer ile "kaçıncı 5 saniyelik dilimde olduğumuz" bilgisinin HMAC'idir.
+    # Böylece yenileme için veritabanına yazmaya gerek kalmaz ve bir önceki kod,
+    # yenisi ekrana geldiği anda geçersiz olmaz.
+
+    @staticmethod
+    def current_window() -> int:
+        return int(time.time() // QR_ROTATE_SECONDS)
+
+    @staticmethod
+    def seconds_until_rotation() -> float:
+        return QR_ROTATE_SECONDS - (time.time() % QR_ROTATE_SECONDS)
+
+    def token_for_window(self, window: int) -> str:
+        key = f"{settings.SECRET_KEY}:{self.secret}".encode()
+        digest = hmac.new(key, f"{self.pk}:{window}".encode(), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(digest[:12]).decode()
+
+    def current_token(self) -> str:
+        return self.token_for_window(self.current_window())
 
     def is_token_valid(self, token: str | None) -> bool:
         if not token or not self.is_active:
             return False
-        if timezone.now() > self.token_expires_at:
-            return False
+        now = self.current_window()
         # compare_digest, karşılaştırma süresinden bilgi sızmasını (timing attack) önler.
-        return secrets.compare_digest(token, self.token)
+        # Tüm pencereleri kontrol ediyoruz ki hangi pencerede eşleştiği de süreden anlaşılmasın.
+        matches = [
+            secrets.compare_digest(token, self.token_for_window(now - offset))
+            for offset in range(QR_VALID_WINDOWS)
+        ]
+        return any(matches)
 
     def close(self) -> None:
         if self.closed_at is None:

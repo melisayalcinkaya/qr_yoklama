@@ -1,10 +1,13 @@
+import time
 from datetime import timedelta
+from unittest import mock
 
 from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
 from attendance.geo import haversine_m, is_within_radius
+from attendance.models import QR_ROTATE_SECONDS, QR_VALID_WINDOWS
 
 from .factories import make_course, make_record, make_session, make_teacher
 
@@ -12,6 +15,9 @@ from .factories import make_course, make_record, make_session, make_teacher
 class AttendanceSessionTests(TestCase):
     def setUp(self):
         self.session = make_session(make_course(make_teacher()))
+        # Pencere sınırına denk gelip testlerin rastgele kırılmaması için
+        # "şimdi"yi bir pencerenin tam başına sabitliyoruz.
+        self.now = (time.time() // QR_ROTATE_SECONDS) * QR_ROTATE_SECONDS
 
     def test_new_session_is_active(self):
         self.assertTrue(self.session.is_active)
@@ -25,32 +31,50 @@ class AttendanceSessionTests(TestCase):
         self.assertFalse(self.session.is_active)
         self.assertIsNotNone(self.session.closed_at)
 
+    def at(self, seconds_from_now):
+        """time.time()'ı ileri sarmak için yardımcı."""
+        return mock.patch("attendance.models.time.time", return_value=self.now + seconds_from_now)
+
     def test_current_token_is_valid(self):
-        self.assertTrue(self.session.is_token_valid(self.session.token))
+        self.assertTrue(self.session.is_token_valid(self.session.current_token()))
 
     def test_wrong_or_missing_token_is_invalid(self):
         self.assertFalse(self.session.is_token_valid("yanlis-token"))
         self.assertFalse(self.session.is_token_valid(""))
         self.assertFalse(self.session.is_token_valid(None))
 
-    def test_expired_token_is_invalid(self):
-        self.session.token_expires_at = timezone.now() - timedelta(seconds=1)
-        self.assertFalse(self.session.is_token_valid(self.session.token))
+    def test_token_changes_every_rotation(self):
+        with self.at(0):
+            first = self.session.current_token()
+        with self.at(QR_ROTATE_SECONDS):
+            self.assertNotEqual(first, self.session.current_token())
+
+    def test_previous_code_still_valid_after_rotation(self):
+        """Hata düzeltmesi: ekran yenilendiği anda okutulmakta olan kod geçersiz olmamalı."""
+        with self.at(0):
+            shown = self.session.current_token()
+        with self.at(QR_ROTATE_SECONDS * (QR_VALID_WINDOWS - 1)):
+            self.assertTrue(self.session.is_token_valid(shown))
+
+    def test_token_expires_after_valid_windows(self):
+        with self.at(0):
+            shown = self.session.current_token()
+        with self.at(QR_ROTATE_SECONDS * QR_VALID_WINDOWS):
+            self.assertFalse(self.session.is_token_valid(shown))
 
     def test_token_of_closed_session_is_invalid(self):
+        token = self.session.current_token()
         self.session.close()
-        self.assertFalse(self.session.is_token_valid(self.session.token))
-
-    def test_rotate_token_invalidates_previous_token(self):
-        old = self.session.token
-        self.session.rotate_token()
-        self.assertNotEqual(old, self.session.token)
-        self.assertFalse(self.session.is_token_valid(old))
-        self.assertTrue(self.session.is_token_valid(self.session.token))
+        self.assertFalse(self.session.is_token_valid(token))
 
     def test_tokens_are_unique_per_session(self):
         other = make_session(self.session.course)
-        self.assertNotEqual(self.session.token, other.token)
+        with self.at(0):
+            self.assertNotEqual(self.session.current_token(), other.current_token())
+
+    def test_token_from_another_session_is_rejected(self):
+        other = make_session(self.session.course)
+        self.assertFalse(self.session.is_token_valid(other.current_token()))
 
 
 class AttendanceRecordConstraintTests(TestCase):

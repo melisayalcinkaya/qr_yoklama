@@ -24,12 +24,12 @@ class AuthenticationRequiredTests(TestCase):
             reverse("course_stats_export", args=[course.pk]),
             reverse("session_live", args=[session.pk]),
             reverse("session_records", args=[session.pk]),
+            reverse("session_refresh_qr", args=[session.pk]),
             reverse("session_export", args=[session.pk]),
         ]
         self.post_urls = [
             reverse("course_create"),
             reverse("session_start", args=[course.pk]),
-            reverse("session_refresh_qr", args=[session.pk]),
             reverse("session_close", args=[session.pk]),
             reverse("record_delete", args=[record.pk]),
         ]
@@ -67,7 +67,7 @@ class OwnershipTests(TestCase):
             ("get", reverse("session_records", args=[self.session.pk])),
             ("get", reverse("session_export", args=[self.session.pk])),
             ("post", reverse("session_start", args=[self.course.pk])),
-            ("post", reverse("session_refresh_qr", args=[self.session.pk])),
+            ("get", reverse("session_refresh_qr", args=[self.session.pk])),
             ("post", reverse("session_close", args=[self.session.pk])),
             ("post", reverse("record_delete", args=[self.record.pk])),
         ]
@@ -113,17 +113,18 @@ class CourseAndSessionFlowTests(TestCase):
         self.client.post(reverse("session_start", args=[course.pk]), {"duration_minutes": 0})
         self.assertFalse(course.sessions.exists())
 
-    def test_refresh_qr_requires_post(self):
+    def test_refresh_qr_returns_current_code_and_countdown(self):
         session = make_session(make_course(self.teacher))
-        self.assertEqual(self.client.get(reverse("session_refresh_qr", args=[session.pk])).status_code, 405)
+        data = self.client.get(reverse("session_refresh_qr", args=[session.pk])).json()
+        self.assertTrue(data["active"])
+        self.assertTrue(data["qr_code_b64"])
+        self.assertTrue(0 < data["seconds_left"] <= 5)
 
-    def test_refresh_qr_rotates_token(self):
+    def test_refresh_qr_of_closed_session(self):
         session = make_session(make_course(self.teacher))
-        old_token = session.token
-        response = self.client.post(reverse("session_refresh_qr", args=[session.pk]))
-        session.refresh_from_db()
-        self.assertTrue(response.json()["active"])
-        self.assertNotEqual(old_token, session.token)
+        session.close()
+        data = self.client.get(reverse("session_refresh_qr", args=[session.pk])).json()
+        self.assertFalse(data["active"])
 
     def test_records_endpoint_returns_only_new_records(self):
         session = make_session(make_course(self.teacher))

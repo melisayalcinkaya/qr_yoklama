@@ -79,3 +79,22 @@ class DemoModeTests(TestCase):
 
     def test_login_hides_demo_credentials_by_default(self):
         self.assertNotContains(self.client.get(reverse("login")), "Demo hesabı")
+
+
+class SignupTests(TestCase):
+    """Canlı demoda yakalanan hata: kayıt sonrası 500 dönüyordu."""
+
+    def test_signup_creates_account_and_logs_in(self):
+        response = self.client.post(
+            reverse("signup"),
+            {"username": "yeni-hoca", "password1": "Cok-guclu-sifre-42", "password2": "Cok-guclu-sifre-42"},
+        )
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_signup_rejects_weak_password(self):
+        response = self.client.post(
+            reverse("signup"), {"username": "yeni-hoca", "password1": "123456", "password2": "123456"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)

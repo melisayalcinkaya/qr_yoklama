@@ -21,7 +21,7 @@
             <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu" width="420" height="420">
             <div class="qr-timer" aria-hidden="true"><span id="qrTimer"></span></div>
         </div>
-        <p class="muted small" style="margin-top:12px">Kod 5 saniyede bir değişir. Fotoğrafı paylaşılan kod birkaç saniye içinde geçersiz olur.</p>
+        <p class="muted small" style="margin-top:12px">Kod 5 saniyede bir değişir; her kod en fazla 15 saniye geçerlidir.</p>
         <div class="actions">
             <form method="post" action="{% url 'session_close' session.pk %}">
                 {% csrf_token %}
@@ -55,7 +55,6 @@
 {% block scripts %}
 <script>
 (function () {
-    const REFRESH_MS = 5000;
     const csrfToken = "{{ csrf_token }}";
     const isActive = {{ session.is_active|yesno:"true,false" }};
     const recordsUrl = "{% url 'session_records' session.pk %}";
@@ -130,30 +129,38 @@
         }
     }
 
-    // QR'ın altındaki çubuk, bir sonraki yenilemeye kalan süreyi gösterir.
-    function restartTimer() {
+    // QR'ın altındaki çubuk, kodun değişmesine kalan süreyi gösterir.
+    function startTimer(seconds) {
         if (!timer) return;
-        timer.style.setProperty("--cycle", REFRESH_MS + "ms");
+        timer.style.setProperty("--cycle", seconds + "s");
         timer.classList.remove("run");
         void timer.offsetWidth; // animasyonu baştan başlatmak için yeniden çizdir
         timer.classList.add("run");
     }
 
+    // Kod zamandan türetildiği için yenilemeyi sunucunun söylediği ana göre
+    // planlıyoruz; böylece ekran ile sunucu aynı saniyede yeni koda geçer.
+    function scheduleRefresh(seconds) {
+        startTimer(seconds);
+        setTimeout(refreshQr, seconds * 1000 + 100);
+    }
+
     async function refreshQr() {
         try {
-            const res = await fetch(qrUrl, { method: "POST", headers: { "X-CSRFToken": csrfToken } });
-            if (!res.ok) return;
+            const res = await fetch(qrUrl);
+            if (!res.ok) throw new Error(res.status);
             const data = await res.json();
             if (!data.active) { window.location.reload(); return; }
             document.getElementById("qrImage").src = "data:image/png;base64," + data.qr_code_b64;
-            restartTimer();
-        } catch (e) { /* bir sonraki denemeyi bekle */ }
+            scheduleRefresh(data.seconds_left);
+        } catch (e) {
+            setTimeout(refreshQr, 2000); // ağ hatasında kısa süre sonra tekrar dene
+        }
     }
 
     loadRecords();
     if (isActive) {
-        restartTimer();
-        setInterval(refreshQr, REFRESH_MS);
+        scheduleRefresh({{ seconds_left|default:"5" }});
         setInterval(loadRecords, 3000);
     }
 })();

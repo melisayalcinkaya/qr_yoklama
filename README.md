@@ -34,7 +34,7 @@ QR Yoklama bu yüzden **katmanlı** bir yaklaşım kullanır:
 
 | Kopya yöntemi | Önlem |
 |---|---|
-| QR'ın fotoğrafını sınıf dışındaki arkadaşa göndermek | QR içindeki token **15 saniyede** geçersiz olur, ekrandaki kod 5 saniyede bir yenilenir |
+| QR'ın fotoğrafını sınıf dışındaki arkadaşa göndermek | Ekrandaki kod 5 saniyede bir değişir ve her kod **en fazla 15 saniye** geçerlidir (telefonu kaldırıp okutmaya yeter, paylaşmaya yetmez) |
 | Linki saklayıp sonradan kullanmak | Token doğrulanınca adres çubuğundan silinir; form yalnızca 3 dakikalık sunucu tarafı izinle gönderilebilir |
 | Aynı telefondan birden fazla kişiye yoklama vermek | Cihaz başına tek kayıt (veritabanı kısıtıyla garanti altında) |
 | Evden yoklama vermek | İsteğe bağlı **konum doğrulama**: öğrenci sınıfın belirlenen yarıçapında olmalı |
@@ -71,12 +71,12 @@ sequenceDiagram
     participant S as Sunucu (Django)
     participant T as Öğrenci telefonu
 
-    loop Her 5 saniyede
-        Ö->>S: POST /sessions/:id/qr/ (CSRF korumalı)
-        S-->>Ö: Yeni token ile QR (15 sn geçerli)
+    loop Her 5 saniyelik dilimde
+        Ö->>S: GET /sessions/:id/qr/
+        S-->>Ö: O dilimin QR'ı = HMAC(gizli değer, dilim no)
     end
     T->>S: GET /c/:id/?t=token  (QR okutuldu)
-    S->>S: Token geçerli mi? (compare_digest)
+    S->>S: Token son 3 dilimden biriyle eşleşiyor mu? (compare_digest)
     S-->>T: Oturuma 3 dk'lık izin yaz, token'sız adrese yönlendir
     T->>S: POST form (+ konum, cihaz kimliği)
     S->>S: İzin, konum, tekrar kontrolü + DB kısıtları
@@ -93,7 +93,7 @@ Proje, [OWASP Top 10](https://owasp.org/Top10/) risklerine karşı şu önlemler
 
 - **Erişim kontrolü:** Tüm öğretmen sayfaları giriş gerektirir. Öğretmen yalnızca kendi verisine erişir; başkasının kaydı için `404` döner (kaydın varlığı da gizlenir).
 - **Kaba kuvvet koruması:** 5 hatalı girişten sonra kullanıcı adı + IP 15 dakika kilitlenir ([django-axes](https://github.com/jazzband/django-axes)).
-- **Güvenli token'lar:** `secrets` modülüyle üretilir, `secrets.compare_digest` ile karşılaştırılır (timing attack'a karşı).
+- **Zamana bağlı QR token'ları:** Google Authenticator'daki kodlar (TOTP) gibi, oturuma özel gizli değer ve 5 saniyelik zaman diliminden HMAC-SHA256 ile türetilir. Yenileme için veritabanına yazılmaz; doğrulama `secrets.compare_digest` ile yapılır (timing attack'a karşı).
 - **CSRF:** Veri değiştiren her istek `POST` ve CSRF token'ı ile yapılır.
 - **XSS:** Django şablonları otomatik kaçış yapar; JavaScript ile oluşturulan satırlarda `innerHTML` yerine `textContent` kullanılır.
 - **Excel formül enjeksiyonu:** `=`, `+`, `-`, `@` ile başlayan değerler dışa aktarımda düz metne çevrilir.
@@ -167,7 +167,7 @@ Kalıcı veri için `DATABASE_URL` ile bir PostgreSQL veritabanı bağlanmalıd�
 ## Testler
 
 ```bash
-python manage.py test                     # 62 test
+python manage.py test                     # 66 test
 coverage run manage.py test && coverage report
 ruff check . && ruff format --check .
 ```
@@ -187,7 +187,7 @@ qr_yoklama/
 │   ├── management/        # seed_demo komutu
 │   ├── static/            # CSS ve yazı tipi
 │   ├── templates/
-│   └── tests/             # 62 test
+│   └── tests/             # 66 test
 ├── config/                # Django ayarları ve URL'ler
 ├── templates/             # Ortak şablonlar (base, giriş)
 ├── .github/workflows/     # CI
@@ -210,4 +210,4 @@ qr_yoklama/
 
 ### In English
 
-**QR Yoklama** is a Django attendance system that is hard to cheat: the QR code shown in class rotates every 5 seconds and its token expires after 15 seconds, a short-lived server-side grant protects the form, one record is allowed per student and device, and an optional geofence checks that the student is in the classroom. Teachers get a live attendance list, Excel export and per-student attendance statistics. The project ships with 62 tests, Ruff linting, a GitHub Actions pipeline, production security settings and a non-root Docker image. Live demo: [qr-yoklama-e9u9.onrender.com](https://qr-yoklama-e9u9.onrender.com) (user `demo`, password `demo-sifre-2026`; the free server may take a minute to wake up). Run it locally with `docker compose up --build`.
+**QR Yoklama** is a Django attendance system that is hard to cheat: the QR code shown in class rotates every 5 seconds and each code is valid for at most 15 seconds (time-based HMAC tokens, like TOTP), a short-lived server-side grant protects the form, one record is allowed per student and device, and an optional geofence checks that the student is in the classroom. Teachers get a live attendance list, Excel export and per-student attendance statistics. The project ships with 66 tests, Ruff linting, a GitHub Actions pipeline, production security settings and a non-root Docker image. Live demo: [qr-yoklama-e9u9.onrender.com](https://qr-yoklama-e9u9.onrender.com) (user `demo`, password `demo-sifre-2026`; the free server may take a minute to wake up). Run it locally with `docker compose up --build`.
