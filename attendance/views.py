@@ -11,7 +11,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.db import IntegrityError, transaction
-from django.db.models import Count
+from django.db.models import Count, Max
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -229,6 +229,107 @@ def session_export(request, pk):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# İstatistikler
+# ---------------------------------------------------------------------------
+
+# Bu oranın altındaki öğrenciler "devamsızlık riski" olarak işaretlenir.
+MIN_ATTENDANCE_RATE = 70
+
+
+def _course_stats(course: Course) -> dict:
+    """
+    Tek bir veritabanı sorgusuyla öğrenci başına katıldığı oturum sayısını hesaplar.
+    Python'da döngüyle saymak yerine işi veritabanına (GROUP BY) yaptırmak,
+    kayıt sayısı büyüdükçe çok daha hızlıdır.
+    """
+    sessions = list(course.sessions.annotate(record_count=Count("records")).order_by("started_at"))
+    total_sessions = len(sessions)
+
+    rows = (
+        AttendanceRecord.objects.filter(session__course=course)
+        .values("student_number")
+        .annotate(attended=Count("session", distinct=True), last_seen=Max("created_at"))
+    )
+    # Öğrencinin en son girdiği adı göster (yazım hatası düzeltilmiş olabilir).
+    names = {}
+    for number, first, last in (
+        AttendanceRecord.objects.filter(session__course=course)
+        .order_by("created_at")
+        .values_list("student_number", "first_name", "last_name")
+    ):
+        names[number] = f"{first} {last}"
+
+    students = []
+    for row in rows:
+        rate = round(100 * row["attended"] / total_sessions) if total_sessions else 0
+        students.append({
+            "number": row["student_number"],
+            "name": names.get(row["student_number"], ""),
+            "attended": row["attended"],
+            "missed": total_sessions - row["attended"],
+            "rate": rate,
+            "at_risk": rate < MIN_ATTENDANCE_RATE,
+            "last_seen": row["last_seen"],
+        })
+    students.sort(key=lambda s: (s["rate"], s["name"]))
+
+    max_count = max((s.record_count for s in sessions), default=0)
+    average = round(sum(s.record_count for s in sessions) / total_sessions, 1) if total_sessions else 0
+    return {
+        "sessions": sessions,
+        "total_sessions": total_sessions,
+        "students": students,
+        "at_risk_count": sum(1 for s in students if s["at_risk"]),
+        "average_attendance": average,
+        "max_count": max_count,
+        "min_rate": MIN_ATTENDANCE_RATE,
+    }
+
+
+@login_required
+def course_stats(request, pk):
+    course = get_object_or_404(Course, pk=pk, teacher=request.user)
+    stats = _course_stats(course)
+    # Grafik için son 20 oturum; çubuk yüksekliği en kalabalık oturuma göre ölçeklenir.
+    chart = [
+        {
+            "label": timezone.localtime(s.started_at).strftime("%d.%m"),
+            "count": s.record_count,
+            "height": round(100 * s.record_count / stats["max_count"]) if stats["max_count"] else 0,
+        }
+        for s in stats["sessions"][-20:]
+    ]
+    return render(request, "attendance/course_stats.html", {"course": course, "chart": chart, **stats})
+
+
+@login_required
+def course_stats_export(request, pk):
+    course = get_object_or_404(Course, pk=pk, teacher=request.user)
+    stats = _course_stats(course)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Devam durumu"
+    ws.append(["Numara", "Ad Soyad", "Katıldığı", "Kaçırdığı", "Devam oranı (%)", "Risk"])
+    for s in stats["students"]:
+        ws.append([
+            _excel_safe(s["number"]),
+            _excel_safe(s["name"]),
+            s["attended"],
+            s["missed"],
+            s["rate"],
+            "Evet" if s["at_risk"] else "",
+        ])
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="devam_durumu_{course.code or course.pk}.xlsx"'
     wb.save(response)
     return response
 

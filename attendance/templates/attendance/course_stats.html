@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}İstatistikler · {{ course }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'course_detail' course.pk %}">← {{ course }}</a></p>
+<h1>Devam istatistikleri</h1>
+
+<div class="stat-grid">
+    <div class="card stat"><span class="stat-value">{{ total_sessions }}</span><span class="muted">oturum</span></div>
+    <div class="card stat"><span class="stat-value">{{ students|length }}</span><span class="muted">öğrenci</span></div>
+    <div class="card stat"><span class="stat-value">{{ average_attendance }}</span><span class="muted">ortalama katılım</span></div>
+    <div class="card stat {% if at_risk_count %}stat-warn{% endif %}"><span class="stat-value">{{ at_risk_count }}</span><span class="muted">%{{ min_rate }} altında</span></div>
+</div>
+
+{% if chart %}
+<section class="card">
+    <h2>Oturum başına katılım</h2>
+    <div class="bar-chart" role="img" aria-label="Son oturumlardaki katılımcı sayıları">
+        {% for bar in chart %}
+        <div class="bar-col" title="{{ bar.label }}: {{ bar.count }} öğrenci">
+            <span class="bar-count">{{ bar.count }}</span>
+            <div class="bar" style="height: {{ bar.height }}%"></div>
+            <span class="bar-label">{{ bar.label }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="list-header">
+        <h2>Öğrenciler</h2>
+        {% if students %}<a class="btn" href="{% url 'course_stats_export' course.pk %}">Excel indir</a>{% endif %}
+    </div>
+    {% if students %}
+    <div class="table-wrap">
+    <table class="table">
+        <thead><tr><th>Numara</th><th>Ad Soyad</th><th>Katıldığı</th><th>Kaçırdığı</th><th>Devam</th></tr></thead>
+        <tbody>
+        {% for s in students %}
+        <tr class="{% if s.at_risk %}row-warn{% endif %}">
+            <td>{{ s.number }}</td>
+            <td>{{ s.name }}</td>
+            <td>{{ s.attended }}</td>
+            <td>{{ s.missed }}</td>
+            <td>
+                <div class="rate"><div class="rate-fill" style="width: {{ s.rate }}%"></div></div>
+                %{{ s.rate }}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="muted">Henüz yoklama verisi yok.</p>
+    {% endif %}
+</section>
+{% endblock %}

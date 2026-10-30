@@ -2,7 +2,10 @@
 {% block title %}{{ course }} · QR Yoklama{% endblock %}
 {% block content %}
 <p><a href="{% url 'dashboard' %}">← Derslerim</a></p>
-<h1>{{ course }}</h1>
+<div class="list-header">
+    <h1>{{ course }}</h1>
+    <a class="btn" href="{% url 'course_stats' course.pk %}">📊 İstatistikler</a>
+</div>
 
 <section class="card">
     <h2>Yoklama başlat</h2>
