@@ -1,42 +1,116 @@
-from django.db import models
-import uuid
-from django.utils import timezone
+import secrets
 from datetime import timedelta
 
-class AttendanceSession(models.Model):
-    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    token_expires_at = models.DateTimeField(default=timezone.now)
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
+
+# QR kodun içindeki token bu süre boyunca geçerlidir. Panel QR'ı bundan
+# daha sık yeniler; böylece ekran görüntüsüyle paylaşılan bir QR kısa
+# sürede işe yaramaz hale gelir.
+TOKEN_LIFETIME = timedelta(seconds=15)
+DEFAULT_SESSION_DURATION = timedelta(minutes=15)
+
+
+def new_token() -> str:
+    # secrets modülü kriptografik olarak güvenli rastgele değer üretir;
+    # random modülü tahmin edilebilir olduğu için güvenlik işlerinde kullanılmaz.
+    return secrets.token_urlsafe(16)
+
+
+class Course(models.Model):
+    teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="courses"
+    )
+    name = models.CharField("Ders adı", max_length=120)
+    code = models.CharField("Ders kodu", max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
-    is_active = models.BooleanField(default=True)
 
-    def refresh_token(self):
-        self.token = uuid.uuid4()
-        self.expires_at = timezone.now() + timezone.timedelta(seconds=10)
-        self.save()
-
-    def save(self, *args, **kwargs):
-        if not self.expires_at:
-            self.expires_at = timezone.now() + timedelta(minutes=5)
-        super().save(*args, **kwargs)
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Ders"
+        verbose_name_plural = "Dersler"
 
     def __str__(self):
-        return f"Session {self.id} - Active: {self.is_active}"
+        return f"{self.code} {self.name}".strip()
+
+
+class AttendanceSessionQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(closed_at__isnull=True, ends_at__gt=timezone.now())
+
+
+class AttendanceSession(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="sessions")
+    started_at = models.DateTimeField(default=timezone.now)
+    ends_at = models.DateTimeField()
+    closed_at = models.DateTimeField(null=True, blank=True)
+    token = models.CharField(max_length=64, default=new_token)
+    token_expires_at = models.DateTimeField()
+
+    objects = AttendanceSessionQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-started_at"]
+        verbose_name = "Yoklama oturumu"
+        verbose_name_plural = "Yoklama oturumları"
+
+    def __str__(self):
+        return f"{self.course} - {timezone.localtime(self.started_at):%d.%m.%Y %H:%M}"
+
+    def save(self, *args, **kwargs):
+        now = timezone.now()
+        if not self.ends_at:
+            self.ends_at = (self.started_at or now) + DEFAULT_SESSION_DURATION
+        if not self.token_expires_at:
+            self.token_expires_at = now + TOKEN_LIFETIME
+        super().save(*args, **kwargs)
+
+    @property
+    def is_active(self) -> bool:
+        return self.closed_at is None and timezone.now() < self.ends_at
+
+    def rotate_token(self) -> None:
+        self.token = new_token()
+        self.token_expires_at = timezone.now() + TOKEN_LIFETIME
+        self.save(update_fields=["token", "token_expires_at"])
+
+    def is_token_valid(self, token: str | None) -> bool:
+        if not token or not self.is_active:
+            return False
+        if timezone.now() > self.token_expires_at:
+            return False
+        # compare_digest, karşılaştırma süresinden bilgi sızmasını (timing attack) önler.
+        return secrets.compare_digest(token, self.token)
+
+    def close(self) -> None:
+        if self.closed_at is None:
+            self.closed_at = timezone.now()
+            self.save(update_fields=["closed_at"])
 
 
 class AttendanceRecord(models.Model):
-    session = models.ForeignKey(AttendanceSession, on_delete=models.CASCADE, related_name="records")
-    student_number = models.CharField(max_length=20)
-    student_name = models.CharField(max_length=100)
-    student_surname = models.CharField(max_length=100, default="Unknown")
+    session = models.ForeignKey(
+        AttendanceSession, on_delete=models.CASCADE, related_name="records"
+    )
+    student_number = models.CharField("Öğrenci numarası", max_length=20)
+    first_name = models.CharField("Ad", max_length=100)
+    last_name = models.CharField("Soyad", max_length=100)
+    device_id = models.CharField(max_length=64, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    timestamp = models.DateTimeField(default=timezone.now)
-    device_id = models.CharField(max_length=100, blank=True, null=True)
+
     class Meta:
-        unique_together = ("session", "student_number")
-        # aynı cihaz aynı session’da bir daha kullanılamasın
+        ordering = ["created_at"]
+        verbose_name = "Yoklama kaydı"
+        verbose_name_plural = "Yoklama kayıtları"
         constraints = [
-            models.UniqueConstraint(fields=['session', 'device_id'], name='unique_device_per_session')
+            models.UniqueConstraint(
+                fields=["session", "student_number"], name="unique_student_per_session"
+            ),
+            models.UniqueConstraint(
+                fields=["session", "device_id"], name="unique_device_per_session"
+            ),
         ]
+
     def __str__(self):
-        return f"{self.student_name} {self.student_surname}({self.student_number}) - Session {self.session.id}"
+        return f"{self.first_name} {self.last_name} ({self.student_number})"

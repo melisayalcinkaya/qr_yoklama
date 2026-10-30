@@ -1,0 +1,32 @@
+{% load static %}<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}QR Yoklama{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="{% url 'dashboard' %}">QR Yoklama</a>
+        {% if user.is_authenticated %}
+        <form method="post" action="{% url 'logout' %}" class="inline">
+            {% csrf_token %}
+            <span class="muted">{{ user.username }}</span>
+            <button type="submit" class="btn btn-ghost">Çıkış</button>
+        </form>
+        {% endif %}
+    </header>
+
+    <main class="container">
+        {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}<li class="msg msg-{{ message.tags }}">{{ message }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Yoklama kapandı{% endblock %}
+{% block content %}
+<section class="card narrow center">
+    <h1>Bu yoklama kapandı</h1>
+    <p class="muted">{{ session.course }} · {{ session.started_at|date:"d.m.Y H:i" }}</p>
+</section>
+{% endblock %}

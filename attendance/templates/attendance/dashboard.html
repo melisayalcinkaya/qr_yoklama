@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Panel · QR Yoklama{% endblock %}
+{% block content %}
+<h1>Derslerim</h1>
+
+{% if active_sessions %}
+<section class="card highlight">
+    <h2>Açık yoklamalar</h2>
+    <ul class="list">
+        {% for s in active_sessions %}
+        <li><a href="{% url 'session_live' s.pk %}">{{ s.course }}</a>
+            <span class="muted">· {{ s.ends_at|time:"H:i" }}'e kadar</span></li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="card">
+    {% if courses %}
+    <ul class="list">
+        {% for course in courses %}
+        <li>
+            <a href="{% url 'course_detail' course.pk %}">{{ course }}</a>
+            <span class="muted">· {{ course.session_count }} oturum</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">Henüz ders eklemediniz.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Yeni ders ekle</h2>
+    <form method="post" action="{% url 'course_create' %}">
+        {% csrf_token %}
+        {{ course_form.as_p }}
+        <button type="submit" class="btn btn-primary">Ekle</button>
+    </form>
+</section>
+{% endblock %}

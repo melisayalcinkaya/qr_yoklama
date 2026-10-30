@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Kayıt · QR Yoklama{% endblock %}
+{% block content %}
+<section class="card narrow">
+    <h1>Öğretmen hesabı oluştur</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-primary btn-block">Kayıt ol</button>
+    </form>
+    <p class="muted">Zaten hesabınız var mı? <a href="{% url 'login' %}">Giriş yapın</a></p>
+</section>
+{% endblock %}

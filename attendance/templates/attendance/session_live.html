@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Yoklama · {{ session.course }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'course_detail' session.course.pk %}">← {{ session.course }}</a></p>
+<h1>{{ session.course }}</h1>
+<p class="muted">{{ session.started_at|date:"d.m.Y H:i" }} · {{ session.ends_at|time:"H:i" }}'e kadar</p>
+
+<section class="card center">
+    {% if session.is_active %}
+    <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu">
+    <p class="muted">QR kod birkaç saniyede bir yenilenir; fotoğrafı paylaşılan kod kısa sürede geçersiz olur.</p>
+    <p><strong id="recordCount">{{ session.records.count }}</strong> öğrenci katıldı</p>
+    <form method="post" action="{% url 'session_close' session.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Yoklamayı bitir</button>
+    </form>
+    {% else %}
+    <p><strong>Bu yoklama kapandı.</strong> {{ session.records.count }} öğrenci katıldı.</p>
+    {% endif %}
+    <p><a class="btn" href="{% url 'session_export' session.pk %}">Excel indir</a></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if session.is_active %}
+<script>
+(function () {
+    const REFRESH_MS = 5000;
+    const url = "{% url 'session_refresh_qr' session.pk %}";
+    const csrfToken = "{{ csrf_token }}";
+    const img = document.getElementById("qrImage");
+    const count = document.getElementById("recordCount");
+
+    async function refresh() {
+        try {
+            const res = await fetch(url, { method: "POST", headers: { "X-CSRFToken": csrfToken } });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.active) { window.location.reload(); return; }
+            img.src = "data:image/png;base64," + data.qr_code_b64;
+            count.textContent = data.record_count;
+        } catch (e) {
+            // Ağ hatasında sessizce bir sonraki denemeyi bekle.
+        }
+    }
+    setInterval(refresh, REFRESH_MS);
+})();
+</script>
+{% endif %}
+{% endblock %}

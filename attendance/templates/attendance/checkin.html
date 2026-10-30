@@ -1,101 +1,33 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Yoklama Girişi</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 25px;
-        }
-        h2 {
-            text-align: center;
-        }
-        form {
-            max-width: 400px;
-            margin: 25px auto;
-            padding: 30px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            background-color: #f9f9f9;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 15px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #1976D2;
-        }
-        #message {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 18px;
-            color: green;
-        }
+{% extends "base.html" %}
+{% block title %}Yoklama · {{ session.course }}{% endblock %}
+{% block content %}
+<section class="card narrow">
+    <h1>{{ session.course }}</h1>
+    <p class="muted">Yoklamaya katılmak için bilgilerinizi girin.</p>
+    <form method="post" id="checkinForm">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {{ form.first_name.label_tag }} {{ form.first_name }} {{ form.first_name.errors }}
+        {{ form.last_name.label_tag }} {{ form.last_name }} {{ form.last_name.errors }}
+        {{ form.student_number.label_tag }} {{ form.student_number }} {{ form.student_number.errors }}
+        {{ form.device_id }}
+        <button type="submit" class="btn btn-primary btn-block">Yoklamaya katıl</button>
+    </form>
+</section>
+{% endblock %}
 
-    </style>
-</head>
-<body>
-    <h2>Yoklama Girişi</h2>
-
-    <!-- Form bölümü -->
-    <div id="form-container">
-        <form method="POST" id="attendanceForm">
-            {% csrf_token %}
-            <label>Ad:</label>
-            <input type="text" name="student_name" required><br><br>
-
-            <label>Soyad:</label>
-            <input type="text" name="student_surname" required><br><br>
-
-            <label>Numara:</label>
-            <input type="text" name="student_number" required><br><br>
-
-            <input type="hidden" name="device_id" id="device_id">
-
-            <button type="submit">Yoklamaya Katıl</button>
-        </form>
-    </div>
-
-    <div id="message" style="display:none; font-weight:bold; color:green;">
-        ✅ Yoklamanız daha önce alındı, tekrar giriş yapamazsınız.
-    </div>
-
-    <script>
-    const sessionId = "{{ session.id }}"; 
-    // Cihaz kimliği yoksa üret
-    if(!localStorage.getItem('device_id')){
-        localStorage.setItem('device_id', crypto.randomUUID());
-    }
-    document.getElementById('device_id').value = localStorage.getItem('device_id');
-
-    // Daha önce yoklama alındı mı kontrol et
-    if(localStorage.getItem('attendance_done' + sessionId) === 'true'){
-        document.getElementById('form-container').style.display = 'none';
-        document.getElementById('message').style.display = 'block';
-    }
-
-    // Form submit edilince flag kaydet
-    document.getElementById('attendanceForm').addEventListener('submit', function() {
-        localStorage.setItem('attendance_done' + sessionId, 'true');
-    });
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script>
+(function () {
+    // Cihaza özgü rastgele bir kimlik: aynı telefondan iki kişinin yoklama
+    // vermesini zorlaştırır. Kesin bir engel değildir (tarayıcı verisi silinebilir),
+    // bu yüzden asıl güvenlik sunucu tarafındaki kısa ömürlü token'dadır.
+    let id = null;
+    try {
+        id = localStorage.getItem("device_id");
+        if (!id) { id = crypto.randomUUID(); localStorage.setItem("device_id", id); }
+    } catch (e) { /* gizli sekme vb. */ }
+    if (id) document.getElementById("id_device_id").value = id;
+})();
+</script>
+{% endblock %}

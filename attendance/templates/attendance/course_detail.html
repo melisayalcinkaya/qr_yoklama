@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ course }} · QR Yoklama{% endblock %}
+{% block content %}
+<p><a href="{% url 'dashboard' %}">← Derslerim</a></p>
+<h1>{{ course }}</h1>
+
+<section class="card">
+    <h2>Yoklama başlat</h2>
+    <form method="post" action="{% url 'session_start' course.pk %}" class="row">
+        {% csrf_token %}
+        {{ start_form.as_p }}
+        <button type="submit" class="btn btn-primary">Başlat</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Geçmiş oturumlar</h2>
+    {% if sessions %}
+    <table class="table">
+        <thead><tr><th>Tarih</th><th>Katılım</th><th>Durum</th><th></th></tr></thead>
+        <tbody>
+        {% for s in sessions %}
+        <tr>
+            <td><a href="{% url 'session_live' s.pk %}">{{ s.started_at|date:"d.m.Y H:i" }}</a></td>
+            <td>{{ s.record_count }}</td>
+            <td>{% if s.is_active %}<span class="badge badge-live">Açık</span>{% else %}Kapalı{% endif %}</td>
+            <td><a href="{% url 'session_export' s.pk %}">Excel</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Bu ders için henüz yoklama alınmadı.</p>
+    {% endif %}
+</section>
+{% endblock %}
