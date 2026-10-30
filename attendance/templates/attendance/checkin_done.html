@@ -1,8 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Yoklama alındı{% endblock %}
+{% block title %}Yoklamanız alındı{% endblock %}
 {% block content %}
-<section class="card narrow center">
-    <h1>✅ Yoklamanız alındı</h1>
-    <p class="muted">{{ session.course }} · {{ session.started_at|date:"d.m.Y" }}</p>
+<section class="sheet narrow result">
+    <span class="mark" aria-hidden="true">✅</span>
+    <h1>Yoklamanız alındı</h1>
+    <p class="muted">{{ session.course }}, {{ session.started_at|date:"d.m.Y" }}. Bu sayfayı kapatabilirsiniz.</p>
 </section>
 {% endblock %}

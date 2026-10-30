@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% block title %}{{ course }} · QR Yoklama{% endblock %}
 {% block content %}
-<p><a href="{% url 'dashboard' %}">← Derslerim</a></p>
-<div class="list-header">
-    <h1>{{ course }}</h1>
+<a class="back" href="{% url 'dashboard' %}">← Derslerim</a>
+<div class="page-head">
     <div>
-        <a class="btn" href="{% url 'course_stats' course.pk %}">📊 İstatistikler</a>
-        <a class="btn" href="{% url 'course_settings' course.pk %}">⚙️ Ayarlar</a>
+        <h1>{{ course }}</h1>
+        {% if course.location_enabled %}<p class="muted small">📍 Konum doğrulaması açık, {{ course.radius_m }} m yarıçap</p>{% endif %}
+    </div>
+    <div class="actions">
+        <a class="btn" href="{% url 'course_stats' course.pk %}">İstatistikler</a>
+        <a class="btn" href="{% url 'course_settings' course.pk %}">Ayarlar</a>
     </div>
 </div>
 
-{% if course.location_enabled %}
-<p class="muted">📍 Konum doğrulaması açık · {{ course.radius_m }} m yarıçap</p>
-{% endif %}
-
-<section class="card">
+<section class="section sheet">
     <h2>Yoklama başlat</h2>
-    <form method="post" action="{% url 'session_start' course.pk %}" class="row">
+    <form method="post" action="{% url 'session_start' course.pk %}" class="inline-form">
         {% csrf_token %}
-        {{ start_form.as_p }}
-        <button type="submit" class="btn btn-primary">Başlat</button>
+        <p class="short"><label for="id_duration_minutes">Süre (dakika)</label>{{ start_form.duration_minutes }}</p>
+        <button type="submit" class="btn btn-primary">Yoklamayı başlat</button>
     </form>
 </section>
 
-<section class="card">
-    <h2>Geçmiş oturumlar</h2>
+<section class="section">
+    <h2>Geçmiş yoklamalar</h2>
     {% if sessions %}
+    <div class="table-wrap">
     <table class="table">
         <thead><tr><th>Tarih</th><th>Katılım</th><th>Durum</th><th></th></tr></thead>
         <tbody>
@@ -33,14 +33,15 @@
         <tr>
             <td><a href="{% url 'session_live' s.pk %}">{{ s.started_at|date:"d.m.Y H:i" }}</a></td>
             <td>{{ s.record_count }}</td>
-            <td>{% if s.is_active %}<span class="badge badge-live">Açık</span>{% else %}Kapalı{% endif %}</td>
-            <td><a href="{% url 'session_export' s.pk %}">Excel</a></td>
+            <td>{% if s.is_active %}<span class="status status-live">Açık</span>{% else %}<span class="status">Kapandı</span>{% endif %}</td>
+            <td><a href="{% url 'session_export' s.pk %}">Excel indir</a></td>
         </tr>
         {% endfor %}
         </tbody>
     </table>
+    </div>
     {% else %}
-    <p class="muted">Bu ders için henüz yoklama alınmadı.</p>
+    <p class="empty">Bu ders için henüz yoklama alınmadı. Yukarıdan ilk yoklamayı başlatın.</p>
     {% endif %}
 </section>
 {% endblock %}

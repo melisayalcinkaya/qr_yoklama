@@ -1,40 +1,41 @@
 {% extends "base.html" %}
 {% block title %}İstatistikler · {{ course }}{% endblock %}
 {% block content %}
-<p><a href="{% url 'course_detail' course.pk %}">← {{ course }}</a></p>
-<h1>Devam istatistikleri</h1>
+<a class="back" href="{% url 'course_detail' course.pk %}">← {{ course }}</a>
+<div class="page-head">
+    <h1>Devam durumu</h1>
+    {% if students %}<a class="btn" href="{% url 'course_stats_export' course.pk %}">Excel indir</a>{% endif %}
+</div>
 
-<div class="stat-grid">
-    <div class="card stat"><span class="stat-value">{{ total_sessions }}</span><span class="muted">oturum</span></div>
-    <div class="card stat"><span class="stat-value">{{ students|length }}</span><span class="muted">öğrenci</span></div>
-    <div class="card stat"><span class="stat-value">{{ average_attendance }}</span><span class="muted">ortalama katılım</span></div>
-    <div class="card stat {% if at_risk_count %}stat-warn{% endif %}"><span class="stat-value">{{ at_risk_count }}</span><span class="muted">%{{ min_rate }} altında</span></div>
+<div class="figures">
+    <div class="figure"><span class="value">{{ total_sessions }}</span><span class="label">yoklama</span></div>
+    <div class="figure"><span class="value">{{ students|length }}</span><span class="label">öğrenci</span></div>
+    <div class="figure"><span class="value">{{ average_attendance }}</span><span class="label">yoklama başına ortalama katılım</span></div>
+    <div class="figure {% if at_risk_count %}warn{% endif %}"><span class="value">{{ at_risk_count }}</span><span class="label">öğrencinin devamı %{{ min_rate }}'in altında</span></div>
 </div>
 
 {% if chart %}
-<section class="card">
-    <h2>Oturum başına katılım</h2>
-    <div class="bar-chart" role="img" aria-label="Son oturumlardaki katılımcı sayıları">
+<section class="section">
+    <h2>Yoklama başına katılım</h2>
+    <div class="bars" role="img" aria-label="Son yoklamalardaki katılımcı sayıları">
         {% for bar in chart %}
         <div class="bar-col" title="{{ bar.label }}: {{ bar.count }} öğrenci">
             <span class="bar-count">{{ bar.count }}</span>
             <div class="bar" style="height: {{ bar.height }}%"></div>
-            <span class="bar-label">{{ bar.label }}</span>
         </div>
         {% endfor %}
     </div>
+    <div class="bar-labels" aria-hidden="true">{% for bar in chart %}<span>{{ bar.label }}</span>{% endfor %}</div>
 </section>
 {% endif %}
 
-<section class="card">
-    <div class="list-header">
-        <h2>Öğrenciler</h2>
-        {% if students %}<a class="btn" href="{% url 'course_stats_export' course.pk %}">Excel indir</a>{% endif %}
-    </div>
+<section class="section">
+    <h2>Öğrenciler</h2>
     {% if students %}
+    <p class="muted small">Devamı en düşük olan öğrenciler üstte. Kırmızı çizgili satırlar %{{ min_rate }} sınırının altında.</p>
     <div class="table-wrap">
     <table class="table">
-        <thead><tr><th>Numara</th><th>Ad Soyad</th><th>Katıldığı</th><th>Kaçırdığı</th><th>Devam</th></tr></thead>
+        <thead><tr><th>Numara</th><th>Ad soyad</th><th>Katıldı</th><th>Kaçırdı</th><th>Devam</th></tr></thead>
         <tbody>
         {% for s in students %}
         <tr class="{% if s.at_risk %}row-warn{% endif %}">
@@ -42,17 +43,14 @@
             <td>{{ s.name }}</td>
             <td>{{ s.attended }}</td>
             <td>{{ s.missed }}</td>
-            <td>
-                <div class="rate"><div class="rate-fill" style="width: {{ s.rate }}%"></div></div>
-                %{{ s.rate }}
-            </td>
+            <td><span class="rate"><span class="rate-fill" style="width: {{ s.rate }}%"></span></span>%{{ s.rate }}</td>
         </tr>
         {% endfor %}
         </tbody>
     </table>
     </div>
     {% else %}
-    <p class="muted">Henüz yoklama verisi yok.</p>
+    <p class="empty">İstatistikler ilk yoklamadan sonra burada görünecek.</p>
     {% endif %}
 </section>
 {% endblock %}

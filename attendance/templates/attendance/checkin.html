@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Yoklama · {{ session.course }}{% endblock %}
 {% block content %}
-<section class="card narrow">
+<section class="sheet narrow">
     <h1>{{ session.course }}</h1>
     <p class="muted">Yoklamaya katılmak için bilgilerinizi girin.</p>
-    <form method="post" id="checkinForm">
+    <form method="post" id="checkinForm" novalidate>
         {% csrf_token %}
         {{ form.non_field_errors }}
         {{ form.first_name.label_tag }} {{ form.first_name }} {{ form.first_name.errors }}
@@ -13,7 +13,7 @@
         {{ form.device_id }}{{ form.latitude }}{{ form.longitude }}{{ form.accuracy }}
 
         {% if session.course.location_enabled %}
-        <p id="locationStatus" class="muted small">📍 Bu ders konum doğrulaması gerektiriyor. Konum alınıyor…</p>
+        <p id="locationStatus" class="muted small" role="status">📍 Bu ders konum doğrulaması istiyor. Konumunuz alınıyor…</p>
         {% endif %}
         <button type="submit" id="submitBtn" class="btn btn-primary btn-block">Yoklamaya katıl</button>
     </form>
@@ -49,12 +49,12 @@
                 document.getElementById("id_latitude").value = pos.coords.latitude;
                 document.getElementById("id_longitude").value = pos.coords.longitude;
                 document.getElementById("id_accuracy").value = pos.coords.accuracy;
-                status.textContent = `📍 Konum alındı (±${Math.round(pos.coords.accuracy)} m).`;
+                status.textContent = `📍 Konumunuz alındı (±${Math.round(pos.coords.accuracy)} m).`;
                 btn.disabled = false;
             },
             (err) => fail(err.code === err.PERMISSION_DENIED
-                ? "Konum izni reddedildi. Tarayıcı ayarlarından izin verip sayfayı yenileyin."
-                : "Konum alınamadı. GPS'i açıp sayfayı yenileyin."),
+                ? "Konum izni verilmedi. Tarayıcı ayarlarından bu siteye konum izni verip sayfayı yenileyin."
+                : "Konumunuz alınamadı. GPS'i açıp sayfayı yenileyin."),
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
     }

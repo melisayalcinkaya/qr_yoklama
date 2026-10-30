@@ -1,33 +1,53 @@
 {% extends "base.html" %}
 {% block title %}Yoklama · {{ session.course }}{% endblock %}
 {% block content %}
-<p><a href="{% url 'course_detail' session.course.pk %}">← {{ session.course }}</a></p>
-<h1>{{ session.course }}</h1>
-<p class="muted">{{ session.started_at|date:"d.m.Y H:i" }} · {{ session.ends_at|time:"H:i" }}'e kadar</p>
+<a class="back" href="{% url 'course_detail' session.course.pk %}">← {{ session.course }}</a>
+<div class="page-head">
+    <div>
+        <h1>{{ session.course }}</h1>
+        <p class="muted">
+            {{ session.started_at|date:"d.m.Y" }},
+            {{ session.started_at|time:"H:i" }}–{{ session.ends_at|time:"H:i" }}
+            {% if session.course.location_enabled %}<span class="small">· 📍 {{ session.course.radius_m }} m</span>{% endif %}
+        </p>
+    </div>
+    <a class="btn" href="{% url 'session_export' session.pk %}">Excel indir</a>
+</div>
 
-<div class="live-grid">
-    <section class="card center">
+<div class="live">
+    <section class="qr-panel">
         {% if session.is_active %}
-        <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu">
-        <p class="muted">QR kod birkaç saniyede bir yenilenir; fotoğrafı paylaşılan kod kısa sürede geçersiz olur.</p>
-        <form method="post" action="{% url 'session_close' session.pk %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-danger">Yoklamayı bitir</button>
-        </form>
+        <div class="qr-frame">
+            <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu" width="420" height="420">
+            <div class="qr-timer" aria-hidden="true"><span id="qrTimer"></span></div>
+        </div>
+        <p class="muted small" style="margin-top:12px">Kod 5 saniyede bir değişir. Fotoğrafı paylaşılan kod birkaç saniye içinde geçersiz olur.</p>
+        <div class="actions">
+            <form method="post" action="{% url 'session_close' session.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Yoklamayı bitir</button>
+            </form>
+        </div>
         {% else %}
-        <p><strong>Bu yoklama kapandı.</strong></p>
+        <div class="sheet result">
+            <span class="mark" aria-hidden="true">🔒</span>
+            <h2>Bu yoklama kapandı</h2>
+            <p class="muted">Katılanların listesi yanda. Excel olarak da indirebilirsiniz.</p>
+        </div>
         {% endif %}
-        <p><a class="btn" href="{% url 'session_export' session.pk %}">Excel indir</a></p>
     </section>
 
-    <section class="card">
-        <div class="list-header">
-            <h2><span id="recordCount">0</span> öğrenci katıldı</h2>
-            <button type="button" id="privacyToggle" class="btn btn-ghost" aria-pressed="true">Listeyi göster</button>
+    <section class="sheet">
+        <div class="list-head">
+            <div>
+                <span id="recordCount" class="count" aria-live="polite">0</span>
+                <span class="muted">öğrenci katıldı</span>
+            </div>
+            <button type="button" id="privacyToggle" class="btn btn-text" aria-pressed="true">Adları göster</button>
         </div>
-        <p class="muted small">Ekran projeksiyona yansıyorsa öğrenci bilgileri varsayılan olarak gizlidir.</p>
-        <ol id="recordList" class="records is-private"></ol>
-        <p id="emptyState" class="muted">Henüz katılım yok.</p>
+        <p class="muted small">Ekran projeksiyona yansıyorsa öğrenci bilgileri gizli kalır.</p>
+        <ol id="recordList" class="ruled records is-private"></ol>
+        <p id="emptyState" class="empty">Öğrenciler QR kodu okuttukça burada görünecek.</p>
     </section>
 </div>
 {% endblock %}
@@ -35,6 +55,7 @@
 {% block scripts %}
 <script>
 (function () {
+    const REFRESH_MS = 5000;
     const csrfToken = "{{ csrf_token }}";
     const isActive = {{ session.is_active|yesno:"true,false" }};
     const recordsUrl = "{% url 'session_records' session.pk %}";
@@ -45,33 +66,40 @@
     const count = document.getElementById("recordCount");
     const empty = document.getElementById("emptyState");
     const toggle = document.getElementById("privacyToggle");
+    const timer = document.getElementById("qrTimer");
     let lastId = 0;
+    let firstLoad = true;
 
     // --- Gizlilik anahtarı ---
     toggle.addEventListener("click", () => {
         const hidden = list.classList.toggle("is-private");
-        toggle.textContent = hidden ? "Listeyi göster" : "Listeyi gizle";
+        toggle.textContent = hidden ? "Adları göster" : "Adları gizle";
         toggle.setAttribute("aria-pressed", String(hidden));
     });
 
     // --- Liste satırı oluşturma ---
     // innerHTML yerine textContent kullanıyoruz: öğrenci adına <script> yazılsa bile
     // tarayıcı onu kod olarak değil düz metin olarak gösterir (XSS koruması).
-    function addRow(r) {
+    function addRow(r, highlight) {
         const li = document.createElement("li");
-        li.dataset.id = r.id;
-        const name = document.createElement("span");
-        name.className = "name";
-        name.textContent = r.name;
+        if (highlight) li.className = "new";
+        const who = document.createElement("span");
+        who.className = "who grow";
+        who.textContent = r.name;
+        const num = document.createElement("span");
+        num.className = "num";
+        num.textContent = r.number;
+        who.append(num);
         const meta = document.createElement("span");
-        meta.className = "muted";
-        meta.textContent = ` · ${r.number} · ${r.time}` + (r.distance !== null ? ` · ${r.distance} m` : "");
+        meta.className = "meta";
+        meta.textContent = r.distance !== null ? `${r.time}, ${r.distance} m` : r.time;
         const del = document.createElement("button");
         del.type = "button";
-        del.className = "btn btn-ghost btn-small";
+        del.className = "btn btn-text danger";
         del.textContent = "Sil";
+        del.setAttribute("aria-label", `${r.name} kaydını sil`);
         del.addEventListener("click", () => removeRecord(r.id, r.name, li));
-        li.append(name, meta, del);
+        li.append(who, meta, del);
         list.appendChild(li);
     }
 
@@ -85,13 +113,14 @@
             const res = await fetch(`${recordsUrl}?after=${lastId}`);
             if (!res.ok) return;
             const data = await res.json();
-            data.records.forEach(r => { addRow(r); lastId = Math.max(lastId, r.id); });
+            data.records.forEach(r => { addRow(r, !firstLoad); lastId = Math.max(lastId, r.id); });
             updateCount(data.total);
+            firstLoad = false;
         } catch (e) { /* bir sonraki denemeyi bekle */ }
     }
 
     async function removeRecord(id, name, li) {
-        if (!confirm(`${name} adlı kaydı silmek istediğinize emin misiniz?`)) return;
+        if (!confirm(`${name} adlı öğrencinin yoklamasını silmek istiyor musunuz?`)) return;
         const res = await fetch(deleteUrlTemplate.replace("/0/", `/${id}/`), {
             method: "POST", headers: { "X-CSRFToken": csrfToken },
         });
@@ -101,6 +130,15 @@
         }
     }
 
+    // QR'ın altındaki çubuk, bir sonraki yenilemeye kalan süreyi gösterir.
+    function restartTimer() {
+        if (!timer) return;
+        timer.style.setProperty("--cycle", REFRESH_MS + "ms");
+        timer.classList.remove("run");
+        void timer.offsetWidth; // animasyonu baştan başlatmak için yeniden çizdir
+        timer.classList.add("run");
+    }
+
     async function refreshQr() {
         try {
             const res = await fetch(qrUrl, { method: "POST", headers: { "X-CSRFToken": csrfToken } });
@@ -108,12 +146,14 @@
             const data = await res.json();
             if (!data.active) { window.location.reload(); return; }
             document.getElementById("qrImage").src = "data:image/png;base64," + data.qr_code_b64;
+            restartTimer();
         } catch (e) { /* bir sonraki denemeyi bekle */ }
     }
 
     loadRecords();
     if (isActive) {
-        setInterval(refreshQr, 5000);
+        restartTimer();
+        setInterval(refreshQr, REFRESH_MS);
         setInterval(loadRecords, 3000);
     }
 })();

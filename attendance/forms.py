@@ -47,6 +47,13 @@ class CheckinForm(forms.ModelForm):
     class Meta:
         model = AttendanceRecord
         fields = ["first_name", "last_name", "student_number"]
+        # autocomplete: telefon adı/soyadı otomatik doldurabilir.
+        # inputmode=numeric: numara alanında telefon rakam klavyesini açar.
+        widgets = {
+            "first_name": forms.TextInput(attrs={"autocomplete": "given-name"}),
+            "last_name": forms.TextInput(attrs={"autocomplete": "family-name"}),
+            "student_number": forms.TextInput(attrs={"inputmode": "numeric", "autocomplete": "off"}),
+        }
 
     def clean_student_number(self):
         number = self.cleaned_data["student_number"].strip()

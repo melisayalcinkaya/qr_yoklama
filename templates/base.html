@@ -3,25 +3,26 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
     <title>{% block title %}QR Yoklama{% endblock %}</title>
+    <link rel="preload" href="{% static 'fonts/lexend-latin-wght-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
-    {% block head %}{% endblock %}
 </head>
 <body>
     <header class="topbar">
         <a class="brand" href="{% url 'dashboard' %}">QR Yoklama</a>
         {% if user.is_authenticated %}
-        <form method="post" action="{% url 'logout' %}" class="inline">
+        <form method="post" action="{% url 'logout' %}" class="account">
             {% csrf_token %}
-            <span class="muted">{{ user.username }}</span>
-            <button type="submit" class="btn btn-ghost">Çıkış</button>
+            <span class="muted small">{{ user.username }}</span>
+            <button type="submit" class="btn btn-text">Çıkış yap</button>
         </form>
         {% endif %}
     </header>
 
     <main class="container">
         {% if messages %}
-        <ul class="messages">
+        <ul class="messages" role="status">
             {% for message in messages %}<li class="msg msg-{{ message.tags }}">{{ message }}</li>{% endfor %}
         </ul>
         {% endif %}

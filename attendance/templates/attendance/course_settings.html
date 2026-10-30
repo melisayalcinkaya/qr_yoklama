@@ -1,32 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Ayarlar · {{ course }}{% endblock %}
 {% block content %}
-<p><a href="{% url 'course_detail' course.pk %}">← {{ course }}</a></p>
-<h1>Ders ayarları</h1>
+<a class="back" href="{% url 'course_detail' course.pk %}">← {{ course }}</a>
+<div class="page-head"><h1>Ders ayarları</h1></div>
 
-<form method="post" class="card">
+<form method="post" class="sheet">
     {% csrf_token %}
     {{ form.non_field_errors }}
-    {{ form.name.label_tag }} {{ form.name }} {{ form.name.errors }}
-    {{ form.code.label_tag }} {{ form.code }} {{ form.code.errors }}
+    <div class="row-2">
+        <div>{{ form.name.label_tag }} {{ form.name }} {{ form.name.errors }}</div>
+        <div>{{ form.code.label_tag }} {{ form.code }} {{ form.code.errors }}</div>
+    </div>
 
-    <h2>📍 Konum doğrulaması</h2>
+    <h2 style="margin-top:16px">Konum doğrulaması</h2>
     <p class="muted small">
-        Açıkken öğrenciler yalnızca sınıfın belirlenen yarıçapı içindeyken yoklama verebilir.
+        Açıkken öğrenciler yalnızca sınıfa belirlediğiniz mesafedeyken yoklama verebilir.
         Sınıftayken “Konumumu kullan” düğmesine basmanız yeterli.
     </p>
-    <label class="checkbox">{{ form.location_enabled }} {{ form.location_enabled.label }}</label>
+    <label class="checkbox">{{ form.location_enabled }} Konum doğrulamasını aç</label>
 
     <div class="row-2">
         <div>{{ form.latitude.label_tag }} {{ form.latitude }} {{ form.latitude.errors }}</div>
         <div>{{ form.longitude.label_tag }} {{ form.longitude }} {{ form.longitude.errors }}</div>
     </div>
-    <button type="button" id="useLocation" class="btn">📍 Konumumu kullan</button>
-    <span id="locationStatus" class="muted small"></span>
+    <p>
+        <button type="button" id="useLocation" class="btn">📍 Konumumu kullan</button>
+        <span id="locationStatus" class="muted small" role="status"></span>
+    </p>
 
     {{ form.radius_m.label_tag }} {{ form.radius_m }} {{ form.radius_m.errors }}
 
-    <button type="submit" class="btn btn-primary">Kaydet</button>
+    <button type="submit" class="btn btn-primary">Ayarları kaydet</button>
 </form>
 {% endblock %}
 
@@ -41,9 +45,9 @@ document.getElementById("useLocation").addEventListener("click", () => {
             document.getElementById("id_latitude").value = pos.coords.latitude.toFixed(6);
             document.getElementById("id_longitude").value = pos.coords.longitude.toFixed(6);
             document.getElementById("id_location_enabled").checked = true;
-            status.textContent = `Konum alındı (±${Math.round(pos.coords.accuracy)} m). Kaydetmeyi unutmayın.`;
+            status.textContent = `Konum alındı (±${Math.round(pos.coords.accuracy)} m). Ayarları kaydedin.`;
         },
-        () => { status.textContent = "Konum alınamadı. Tarayıcı izinlerini kontrol edin."; },
+        () => { status.textContent = "Konum alınamadı. Tarayıcının konum iznini kontrol edin."; },
         { enableHighAccuracy: true, timeout: 15000 }
     );
 });
