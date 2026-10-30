@@ -34,6 +34,8 @@ jobs:
       DJANGO_DEBUG: "False"
       DJANGO_SECRET_KEY: ci-only-not-a-real-secret
       DJANGO_ALLOWED_HOSTS: localhost,testserver
+      # Test istemcisi HTTPS kullanmadığı için yönlendirme testlerde kapalı.
+      DJANGO_SECURE_SSL_REDIRECT: "False"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,7 +46,41 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: Eksik migration var mı?
         run: python manage.py makemigrations --check --dry-run
+      - name: Production güvenlik denetimi
+        # Bu adım gerçek production ayarlarıyla çalışır (HTTPS yönlendirmesi açık,
+        # en az 50 karakterlik rastgele anahtar).
+        env:
+          DJANGO_SECURE_SSL_REDIRECT: "True"
+        run: |
+          export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')"
+          python manage.py check --deploy --fail-level WARNING
+      - name: Statik dosyaları topla
+        run: python manage.py collectstatic --noinput
       - name: Testler
         run: coverage run manage.py test
       - name: Kapsam raporu
         run: coverage report
+
+  docker:
+    name: Docker imajı
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: İmajı oluştur
+        run: docker build -t qr-yoklama .
+      - name: Konteyneri başlat ve yanıt verdiğini doğrula
+        run: |
+          docker run -d --name app -p 8000:8000 \
+            -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')" \
+            -e DJANGO_ALLOWED_HOSTS=localhost \
+            -e DJANGO_SECURE_SSL_REDIRECT=False \
+            -e DJANGO_SEED_DEMO=True \
+            qr-yoklama
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/accounts/login/ > /dev/null; then
+              echo "Uygulama ayakta"; docker logs app | tail -5; exit 0
+            fi
+            sleep 2
+          done
+          docker logs app; exit 1
