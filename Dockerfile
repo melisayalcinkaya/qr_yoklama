@@ -28,4 +28,7 @@ USER app
 EXPOSE 8000
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-"]
+# Barındırma platformları portu PORT değişkeniyle verir (Render: 10000).
+# İşçi sayısı WEB_CONCURRENCY ile ayarlanır; ücretsiz 512 MB'lık makinede 2 yeterli.
+ENV WEB_CONCURRENCY=2
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --access-logfile -"]

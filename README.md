@@ -135,6 +135,16 @@ python manage.py runserver
 
 > **Telefonla denemek için:** Telefon ve bilgisayar aynı ağdayken `python manage.py runserver 0.0.0.0:8000` çalıştırın ve bilgisayarın IP'sini `.env` içindeki `DJANGO_ALLOWED_HOSTS` listesine ekleyin. Konum doğrulaması tarayıcı kuralı gereği yalnızca HTTPS (veya `localhost`) üzerinde çalışır.
 
+### Render'a yayınlama (ücretsiz)
+
+Repodaki [`render.yaml`](render.yaml) dosyası sayesinde tek tıkla yayınlanabilir:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/melisayalcinkaya/qr_yoklama)
+
+Ücretsiz planda servis 15 dakika kullanılmazsa uyku moduna geçer; ilk açılış yaklaşık bir dakika sürebilir.
+Disk geçici olduğu için veriler her yeniden başlatmada silinir ve demo verisi baştan yüklenir.
+Kalıcı veri için `DATABASE_URL` ile bir PostgreSQL veritabanı bağlanmalıdır.
+
 ### Ortam değişkenleri
 
 | Değişken | Açıklama | Varsayılan |
@@ -145,11 +155,13 @@ python manage.py runserver
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | Ör. `https://yoklama.ornek.com` | — |
 | `DATABASE_URL` | Ör. `postgres://kullanici:sifre@host:5432/db` | SQLite |
 | `DJANGO_SECURE_SSL_REDIRECT` | HTTP'yi HTTPS'e yönlendir | `True` |
+| `DJANGO_TRUSTED_PROXY_COUNT` | Önündeki güvenilir proxy sayısı (Render: `1`) | `0` |
+| `DJANGO_SEED_DEMO` | Açılışta demo verisi yükle, giriş sayfasında demo hesabını göster | `False` |
 
 ## Testler
 
 ```bash
-python manage.py test                     # 57 test
+python manage.py test                     # 62 test
 coverage run manage.py test && coverage report
 ruff check . && ruff format --check .
 ```
@@ -169,7 +181,7 @@ qr_yoklama/
 │   ├── management/        # seed_demo komutu
 │   ├── static/            # CSS ve yazı tipi
 │   ├── templates/
-│   └── tests/             # 57 test
+│   └── tests/             # 62 test
 ├── config/                # Django ayarları ve URL'ler
 ├── templates/             # Ortak şablonlar (base, giriş)
 ├── .github/workflows/     # CI
@@ -192,4 +204,4 @@ qr_yoklama/
 
 ### In English
 
-**QR Yoklama** is a Django attendance system that is hard to cheat: the QR code shown in class rotates every 5 seconds and its token expires after 15 seconds, a short-lived server-side grant protects the form, one record is allowed per student and device, and an optional geofence checks that the student is in the classroom. Teachers get a live attendance list, Excel export and per-student attendance statistics. The project ships with 57 tests, Ruff linting, a GitHub Actions pipeline, production security settings and a non-root Docker image. Run it with `docker compose up --build` and log in as **demo / demo-sifre-2026**.
+**QR Yoklama** is a Django attendance system that is hard to cheat: the QR code shown in class rotates every 5 seconds and its token expires after 15 seconds, a short-lived server-side grant protects the form, one record is allowed per student and device, and an optional geofence checks that the student is in the classroom. Teachers get a live attendance list, Excel export and per-student attendance statistics. The project ships with 62 tests, Ruff linting, a GitHub Actions pipeline, production security settings and a non-root Docker image. Run it with `docker compose up --build` and log in as **demo / demo-sifre-2026**.

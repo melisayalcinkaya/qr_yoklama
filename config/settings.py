@@ -39,6 +39,19 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
+# Render, servisin adresini bu değişkenle otomatik verir; elle yazmaya gerek kalmaz.
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+
+# Uygulamanın önünde kaç güvenilir proxy var? (Render: 1). Gerçek istemci IP'si
+# bulunurken kullanılır; bkz. attendance/security.py
+TRUSTED_PROXY_COUNT = int(os.environ.get("DJANGO_TRUSTED_PROXY_COUNT", 0))
+
+# Demo modu: giriş sayfasında demo hesap bilgisi gösterilir.
+DEMO_MODE = env_bool("DJANGO_SEED_DEMO", False)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -77,6 +90,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "attendance.context_processors.demo_mode",
             ],
         },
     },
@@ -137,6 +151,7 @@ AXES_COOLOFF_TIME = timedelta(minutes=15)  # sonra 15 dakika kilit
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_TEMPLATE = "registration/lockout.html"
+AXES_CLIENT_IP_CALLABLE = "attendance.security.get_client_ip"
 
 # ---------------------------------------------------------------------------
 # Production güvenlik ayarları (DEBUG kapalıyken)

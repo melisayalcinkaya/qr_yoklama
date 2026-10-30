@@ -1,0 +1,20 @@
+# Render Blueprint: Render bu dosyayı okuyup servisi otomatik oluşturur.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: qr-yoklama
+    runtime: docker          # repodaki Dockerfile kullanılır
+    plan: free
+    region: frankfurt        # Türkiye'ye en yakın bölge
+    autoDeploy: true         # main'e her push'ta yeniden yayınlanır
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true  # Render güçlü, rastgele bir anahtar üretir
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_TRUSTED_PROXY_COUNT
+        value: "1"
+      # Ücretsiz planda disk geçicidir: SQLite verisi her yeniden başlatmada
+      # silinir ve demo verisi baştan yüklenir. Kendini sıfırlayan bir demo için ideal.
+      - key: DJANGO_SEED_DEMO
+        value: "True"

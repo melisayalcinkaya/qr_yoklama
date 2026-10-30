@@ -46,3 +46,36 @@ class SeedDemoCommandTests(TestCase):
         self.assertEqual(Course.objects.count(), 2)
         course = Course.objects.get(code="BIL201")
         self.assertEqual(course.sessions.count(), 8)
+
+
+class ClientIpTests(TestCase):
+    def setUp(self):
+        from django.test import RequestFactory
+
+        self.factory = RequestFactory()
+
+    def ip(self, **meta):
+        from attendance.security import get_client_ip
+
+        return get_client_ip(self.factory.get("/", **meta))
+
+    def test_without_proxy_uses_remote_addr(self):
+        self.assertEqual(self.ip(REMOTE_ADDR="1.1.1.1", HTTP_X_FORWARDED_FOR="9.9.9.9"), "1.1.1.1")
+
+    @override_settings(TRUSTED_PROXY_COUNT=1)
+    def test_behind_proxy_uses_forwarded_address(self):
+        self.assertEqual(self.ip(REMOTE_ADDR="10.0.0.1", HTTP_X_FORWARDED_FOR="5.5.5.5"), "5.5.5.5")
+
+    @override_settings(TRUSTED_PROXY_COUNT=1)
+    def test_spoofed_forwarded_header_is_ignored(self):
+        # Saldırgan başlığa sahte bir IP yazar; proxy gerçek IP'yi sona ekler.
+        self.assertEqual(self.ip(REMOTE_ADDR="10.0.0.1", HTTP_X_FORWARDED_FOR="1.2.3.4, 5.5.5.5"), "5.5.5.5")
+
+
+class DemoModeTests(TestCase):
+    @override_settings(DEMO_MODE=True)
+    def test_login_shows_demo_credentials_in_demo_mode(self):
+        self.assertContains(self.client.get(reverse("login")), "Demo hesabı")
+
+    def test_login_hides_demo_credentials_by_default(self):
+        self.assertNotContains(self.client.get(reverse("login")), "Demo hesabı")
