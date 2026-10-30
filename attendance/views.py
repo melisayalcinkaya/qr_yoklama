@@ -16,7 +16,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .forms import CheckinForm, CourseForm, StartSessionForm
 from .models import AttendanceRecord, AttendanceSession, Course
@@ -157,8 +157,46 @@ def session_refresh_qr(request, pk):
     return JsonResponse({
         "active": True,
         "qr_code_b64": _qr_png_base64(_checkin_url(request, session)),
-        "record_count": session.records.count(),
     })
+
+
+@login_required
+@require_GET
+def session_records(request, pk):
+    """
+    Canlı liste için yalnızca yeni kayıtları döner (?after=<son görülen id>).
+    Her seferinde tüm listeyi göndermek yerine farkı göndermek ağ trafiğini azaltır.
+    """
+    session = _get_own_session(request, pk)
+    try:
+        after = int(request.GET.get("after", 0))
+    except ValueError:
+        after = 0
+    records = session.records.filter(pk__gt=after).order_by("pk")
+    return JsonResponse({
+        "active": session.is_active,
+        "total": session.records.count(),
+        "records": [
+            {
+                "id": r.pk,
+                "name": f"{r.first_name} {r.last_name}",
+                "number": r.student_number,
+                "time": timezone.localtime(r.created_at).strftime("%H:%M:%S"),
+            }
+            for r in records
+        ],
+    })
+
+
+@login_required
+@require_POST
+def record_delete(request, pk):
+    """Öğretmen hatalı ya da şüpheli bir kaydı listeden çıkarabilir."""
+    record = get_object_or_404(
+        AttendanceRecord, pk=pk, session__course__teacher=request.user
+    )
+    record.delete()
+    return JsonResponse({"deleted": pk})
 
 
 @login_required

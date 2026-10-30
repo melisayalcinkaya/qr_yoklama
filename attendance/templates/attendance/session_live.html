@@ -5,46 +5,117 @@
 <h1>{{ session.course }}</h1>
 <p class="muted">{{ session.started_at|date:"d.m.Y H:i" }} · {{ session.ends_at|time:"H:i" }}'e kadar</p>
 
-<section class="card center">
-    {% if session.is_active %}
-    <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu">
-    <p class="muted">QR kod birkaç saniyede bir yenilenir; fotoğrafı paylaşılan kod kısa sürede geçersiz olur.</p>
-    <p><strong id="recordCount">{{ session.records.count }}</strong> öğrenci katıldı</p>
-    <form method="post" action="{% url 'session_close' session.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Yoklamayı bitir</button>
-    </form>
-    {% else %}
-    <p><strong>Bu yoklama kapandı.</strong> {{ session.records.count }} öğrenci katıldı.</p>
-    {% endif %}
-    <p><a class="btn" href="{% url 'session_export' session.pk %}">Excel indir</a></p>
-</section>
+<div class="live-grid">
+    <section class="card center">
+        {% if session.is_active %}
+        <img id="qrImage" class="qr" src="data:image/png;base64,{{ qr_code_b64 }}" alt="Yoklama QR kodu">
+        <p class="muted">QR kod birkaç saniyede bir yenilenir; fotoğrafı paylaşılan kod kısa sürede geçersiz olur.</p>
+        <form method="post" action="{% url 'session_close' session.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Yoklamayı bitir</button>
+        </form>
+        {% else %}
+        <p><strong>Bu yoklama kapandı.</strong></p>
+        {% endif %}
+        <p><a class="btn" href="{% url 'session_export' session.pk %}">Excel indir</a></p>
+    </section>
+
+    <section class="card">
+        <div class="list-header">
+            <h2><span id="recordCount">0</span> öğrenci katıldı</h2>
+            <button type="button" id="privacyToggle" class="btn btn-ghost" aria-pressed="true">Listeyi göster</button>
+        </div>
+        <p class="muted small">Ekran projeksiyona yansıyorsa öğrenci bilgileri varsayılan olarak gizlidir.</p>
+        <ol id="recordList" class="records is-private"></ol>
+        <p id="emptyState" class="muted">Henüz katılım yok.</p>
+    </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
-{% if session.is_active %}
 <script>
 (function () {
-    const REFRESH_MS = 5000;
-    const url = "{% url 'session_refresh_qr' session.pk %}";
     const csrfToken = "{{ csrf_token }}";
-    const img = document.getElementById("qrImage");
-    const count = document.getElementById("recordCount");
+    const isActive = {{ session.is_active|yesno:"true,false" }};
+    const recordsUrl = "{% url 'session_records' session.pk %}";
+    const qrUrl = "{% url 'session_refresh_qr' session.pk %}";
+    const deleteUrlTemplate = "{% url 'record_delete' 0 %}";
 
-    async function refresh() {
+    const list = document.getElementById("recordList");
+    const count = document.getElementById("recordCount");
+    const empty = document.getElementById("emptyState");
+    const toggle = document.getElementById("privacyToggle");
+    let lastId = 0;
+
+    // --- Gizlilik anahtarı ---
+    toggle.addEventListener("click", () => {
+        const hidden = list.classList.toggle("is-private");
+        toggle.textContent = hidden ? "Listeyi göster" : "Listeyi gizle";
+        toggle.setAttribute("aria-pressed", String(hidden));
+    });
+
+    // --- Liste satırı oluşturma ---
+    // innerHTML yerine textContent kullanıyoruz: öğrenci adına <script> yazılsa bile
+    // tarayıcı onu kod olarak değil düz metin olarak gösterir (XSS koruması).
+    function addRow(r) {
+        const li = document.createElement("li");
+        li.dataset.id = r.id;
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = r.name;
+        const meta = document.createElement("span");
+        meta.className = "muted";
+        meta.textContent = ` · ${r.number} · ${r.time}`;
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "btn btn-ghost btn-small";
+        del.textContent = "Sil";
+        del.addEventListener("click", () => removeRecord(r.id, r.name, li));
+        li.append(name, meta, del);
+        list.appendChild(li);
+    }
+
+    function updateCount(total) {
+        count.textContent = total;
+        empty.hidden = total > 0;
+    }
+
+    async function loadRecords() {
         try {
-            const res = await fetch(url, { method: "POST", headers: { "X-CSRFToken": csrfToken } });
+            const res = await fetch(`${recordsUrl}?after=${lastId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            data.records.forEach(r => { addRow(r); lastId = Math.max(lastId, r.id); });
+            updateCount(data.total);
+        } catch (e) { /* bir sonraki denemeyi bekle */ }
+    }
+
+    async function removeRecord(id, name, li) {
+        if (!confirm(`${name} adlı kaydı silmek istediğinize emin misiniz?`)) return;
+        const res = await fetch(deleteUrlTemplate.replace("/0/", `/${id}/`), {
+            method: "POST", headers: { "X-CSRFToken": csrfToken },
+        });
+        if (res.ok) {
+            li.remove();
+            updateCount(list.children.length);
+        }
+    }
+
+    async function refreshQr() {
+        try {
+            const res = await fetch(qrUrl, { method: "POST", headers: { "X-CSRFToken": csrfToken } });
             if (!res.ok) return;
             const data = await res.json();
             if (!data.active) { window.location.reload(); return; }
-            img.src = "data:image/png;base64," + data.qr_code_b64;
-            count.textContent = data.record_count;
-        } catch (e) {
-            // Ağ hatasında sessizce bir sonraki denemeyi bekle.
-        }
+            document.getElementById("qrImage").src = "data:image/png;base64," + data.qr_code_b64;
+        } catch (e) { /* bir sonraki denemeyi bekle */ }
     }
-    setInterval(refresh, REFRESH_MS);
+
+    loadRecords();
+    if (isActive) {
+        setInterval(refreshQr, 5000);
+        setInterval(loadRecords, 3000);
+    }
 })();
 </script>
-{% endif %}
 {% endblock %}
