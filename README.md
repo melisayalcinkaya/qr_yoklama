@@ -9,6 +9,12 @@
 Derste yoklamayı saniyeler içinde alan, **kopya çekilmesi zor** bir QR yoklama sistemi.
 Öğretmen ekrana QR kodu yansıtır, öğrenciler telefonlarıyla okutup adlarını girer; liste canlı olarak dolar ve Excel'e aktarılır.
 
+**🔗 Canlı demo: [qr-yoklama-e9u9.onrender.com](https://qr-yoklama-e9u9.onrender.com)** · kullanıcı adı `demo`, şifre `demo-sifre-2026`
+
+> Ücretsiz sunucu kullanılmadığında uyku moduna geçer; ilk açılış yaklaşık bir dakika sürebilir. Demo verileri her yeniden başlatmada sıfırlanır.
+>
+> **Denemek için:** Demo hesabıyla girip *Veri Yapıları* dersinden bir yoklama başlatın ve ekrandaki QR'ı telefonunuzla okutun.
+
 <p align="center">
   <img src="docs/screenshots/canli-yoklama.png" alt="Öğretmenin canlı yoklama ekranı: büyük QR kod ve katılan öğrencilerin listesi" width="760">
 </p>
@@ -204,4 +210,4 @@ qr_yoklama/
 
 ### In English
 
-**QR Yoklama** is a Django attendance system that is hard to cheat: the QR code shown in class rotates every 5 seconds and its token expires after 15 seconds, a short-lived server-side grant protects the form, one record is allowed per student and device, and an optional geofence checks that the student is in the classroom. Teachers get a live attendance list, Excel export and per-student attendance statistics. The project ships with 62 tests, Ruff linting, a GitHub Actions pipeline, production security settings and a non-root Docker image. Run it with `docker compose up --build` and log in as **demo / demo-sifre-2026**.
+**QR Yoklama** is a Django attendance system that is hard to cheat: the QR code shown in class rotates every 5 seconds and its token expires after 15 seconds, a short-lived server-side grant protects the form, one record is allowed per student and device, and an optional geofence checks that the student is in the classroom. Teachers get a live attendance list, Excel export and per-student attendance statistics. The project ships with 62 tests, Ruff linting, a GitHub Actions pipeline, production security settings and a non-root Docker image. Live demo: [qr-yoklama-e9u9.onrender.com](https://qr-yoklama-e9u9.onrender.com) (user `demo`, password `demo-sifre-2026`; the free server may take a minute to wake up). Run it locally with `docker compose up --build`.
